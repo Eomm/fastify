@@ -193,7 +193,13 @@ function build (options) {
     setNotFoundHandler: setNotFoundHandler,
     setErrorHandler: setErrorHandler,
     // Set fastify initial configuration options read-only object
-    initialConfig: getSecuredInitialConfig(options)
+    initialConfig: getSecuredInitialConfig(options),
+    toString () {
+      return avvio.prettyPrint()
+    },
+    toJSON () {
+      return avvio.toJSON()
+    }
   }
 
   Object.defineProperty(fastify, 'schemaCompiler', {

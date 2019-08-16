@@ -32,6 +32,8 @@ const decorator = require('./lib/decorate')
 const ContentTypeParser = require('./lib/contentTypeParser')
 const { Hooks, buildHooks } = require('./lib/hooks')
 const { Schemas, buildSchemas } = require('./lib/schemas')
+const validation = require('./lib/validation')
+const { buildSchemaCompiler } = validation
 const { createLogger } = require('./lib/logger')
 const pluginUtils = require('./lib/pluginUtils')
 const reqIdGenFactory = require('./lib/reqIdGenFactory')
@@ -93,6 +95,9 @@ function build (options) {
   // 404 router, used for handling encapsulated 404 handlers
   const fourOhFour = build404(options)
 
+  const schemaCache = new Map()
+  schemaCache.put = schemaCache.set
+
   // HTTP server and its handler
   const httpHandler = router.routing
   const { server, listen } = createServer(options, httpHandler)
@@ -111,6 +116,7 @@ function build (options) {
       closing: false,
       started: false
     },
+    schemaCache,
     [kOptions]: options,
     [kChildren]: [],
     [kBodyLimit]: bodyLimit,
@@ -118,7 +124,7 @@ function build (options) {
     [kLogLevel]: '',
     [kHooks]: new Hooks(),
     [kSchemas]: schemas,
-    [kSchemaCompiler]: null,
+    [kSchemaCompiler]: buildSchemaCompiler([], schemaCache),
     [kReplySerializerDefault]: null,
     [kContentTypeParser]: new ContentTypeParser(bodyLimit, (options.onProtoPoisoning || defaultInitOptions.onProtoPoisoning)),
     [kReply]: Reply.buildReply(Reply),
@@ -441,6 +447,13 @@ function override (old, fn, opts) {
   instance[kSchemas] = buildSchemas(old[kSchemas])
   instance.getSchemas = instance[kSchemas].getSchemas.bind(instance[kSchemas])
   instance[pluginUtils.registeredPlugins] = Object.create(instance[pluginUtils.registeredPlugins])
+
+  instance.schemaCache = old.schemaCache
+
+  instance.after(() => {
+    const externalSchemas = instance[kSchemas].getJsonSchemas({ onlyAbsoluteUri: true })
+    instance[kSchemaCompiler] = buildSchemaCompiler(externalSchemas, instance.schemaCache)
+  })
 
   if (opts.prefix) {
     instance[kFourOhFour].arrange404(instance)

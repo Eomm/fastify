@@ -4,7 +4,7 @@
 
 The [Validation and Serialization](https://github.com/fastify/fastify/blob/master/docs/Validation-and-Serialization.md) documentation outlines all parameters accepted by Fastify to set up JSON Schema Validation in order to validate the input, and JSON Schema Serialization in order to optimize the output.
 
-[`fluent-schema`](fluent-schema-repo) can be used to simplify this task while allowing the reuse of constants.
+[`fluent-schema`][fluent-schema-repo] can be used to simplify this task while allowing the reuse of constants.
 
 ### Basic settings
 

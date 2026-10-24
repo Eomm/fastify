@@ -412,8 +412,8 @@ export type preResponseValidationMetaHookHandler<
     RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
   = ReturnType<preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply,
     RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
-> = Return extends ReturnType<preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply,
-  RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
+> = Return extends ReturnType<preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest,
+  RawReply, RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
   ? preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply, RouteGeneric,
     ContextConfig, SchemaCompiler, TypeProvider, Logger>
   : preResponseValidationAsyncHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply, RouteGeneric,

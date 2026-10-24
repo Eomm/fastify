@@ -68,6 +68,10 @@ fastify.route(options)
   functions.
 * `preHandler(request, reply, done)`: a [function](./Hooks.md#prehandler) called
   just before the request handler, it could also be an array of functions.
+* `preResponseValidation(request, reply, payload, done)`: a
+  [function](./Hooks.md#preresponsevalidation) called just after the request
+  handler and before the payload is validated against `schema.response`, it
+  could also be an array of functions.
 * `preSerialization(request, reply, payload, done)`: a
   [function](./Hooks.md#preserialization) called just before the serialization,
   it could also be an array of functions.
@@ -145,7 +149,8 @@ fastify.route(options)
 
 > ℹ️ Note:
 > The documentation for `onRequest`, `preParsing`, `preValidation`,
-> `preHandler`, `preSerialization`, `onSend`, and `onResponse` is detailed in
+> `preHandler`, `preResponseValidation`, `preSerialization`, `onSend`, and
+> `onResponse` is detailed in
 > [Hooks](./Hooks.md). To send a response before the request is handled by the
 > `handler`, see [Respond to a request from
 > a hook](./Hooks.md#respond-to-a-request-from-a-hook).

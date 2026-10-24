@@ -67,7 +67,7 @@ test('async await', async t => {
   try {
     fastify.get('/await/hostname_port', optsWithHostnameAndPort, async function awaitMyFunc (req, reply) {
       await sleep(200)
-      return { hello: 'world', hostname: req.hostname, port: req.port }
+      return { hello: 'world', hostname: req.hostname, port: String(req.port) }
     })
     t.assert.ok(true)
   } catch (e) {

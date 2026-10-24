@@ -866,8 +866,12 @@ describe('preSerializationEnd should handle errors if the serialize method throw
     })
 
     fastify.post('/', {
-      handler (req, reply) { reply.send({ notOk: true }) },
-      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
+      handler (req, reply) { reply.send({ ok: true }) },
+      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
+      // The serializer throws: the output validation passes, so the
+      // `preSerialization` hook runs and the serialization error is handled
+      // by the error handler.
+      serializerCompiler: () => () => { throw new Error('serialize error') }
     })
 
     fastify.inject({
@@ -890,8 +894,12 @@ describe('preSerializationEnd should handle errors if the serialize method throw
     })
 
     fastify.post('/', {
-      handler (req, reply) { reply.send({ notOk: true }) },
-      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
+      handler (req, reply) { reply.send({ ok: true }) },
+      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
+      // The serializer throws: the output validation passes, so the
+      // `preSerialization` hook runs and the serialization error is handled
+      // by the error handler.
+      serializerCompiler: () => () => { throw new Error('serialize error') }
     })
 
     fastify.inject({

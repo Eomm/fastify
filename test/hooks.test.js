@@ -2847,7 +2847,6 @@ test('preSerialization hook should run before serialization and be able to modif
               type: 'string'
             }
           },
-          required: ['world'],
           additionalProperties: false
         }
       }

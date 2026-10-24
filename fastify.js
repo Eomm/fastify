@@ -604,7 +604,7 @@ function fastify (serverOptions) {
       throw new errorCodes.FST_ERR_HOOK_INVALID_HANDLER(name, fn)
     }
 
-    if (name === 'onSend' || name === 'preSerialization' || name === 'onError' || name === 'preParsing') {
+    if (name === 'onSend' || name === 'preSerialization' || name === 'onError' || name === 'preParsing' || name === 'preResponseValidation') {
       if (fn.constructor.name === 'AsyncFunction' && fn.length === 4) {
         throw new errorCodes.FST_ERR_HOOK_INVALID_ASYNC_HANDLER()
       }

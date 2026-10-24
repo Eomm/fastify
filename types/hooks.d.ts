@@ -350,6 +350,76 @@ export type preSerializationMetaHookHandler<
     ContextConfig, SchemaCompiler, TypeProvider, Logger>
 
 /**
+ * `preResponseValidation` is the hook that runs after the handler returned the
+ * payload and before the payload is validated against `schema.response`.
+ *  Note: the hook is NOT called if the payload is a string, a Buffer, an
+ * ArrayBuffer, a stream or a Response. A `null` payload does reach the hook.
+ */
+export interface preResponseValidationHookHandler<
+  PreResponseValidationPayload = unknown,
+  RawServer extends RawServerBase = RawServerDefault,
+  RawRequest extends RawRequestDefaultExpression<RawServer> = RawRequestDefaultExpression<RawServer>,
+  RawReply extends RawReplyDefaultExpression<RawServer> = RawReplyDefaultExpression<RawServer>,
+  RouteGeneric extends RouteGenericInterface = RouteGenericInterface,
+  ContextConfig = ContextConfigDefault,
+  SchemaCompiler extends FastifySchema = FastifySchema,
+  TypeProvider extends FastifyTypeProvider = FastifyTypeProviderDefault,
+  Logger extends FastifyBaseLogger = FastifyBaseLogger
+> {
+  (
+    this: FastifyInstance<RawServer, RawRequest, RawReply, Logger, TypeProvider>,
+    request: FastifyRequest<RouteGeneric, RawServer, RawRequest, SchemaCompiler, TypeProvider, ContextConfig, Logger>,
+    reply: FastifyReply<RouteGeneric, RawServer, RawRequest, RawReply, ContextConfig, SchemaCompiler, TypeProvider>,
+    payload: PreResponseValidationPayload,
+    done: DoneFuncWithErrOrRes
+  ): void;
+}
+
+export interface preResponseValidationAsyncHookHandler<
+  PreResponseValidationPayload = unknown,
+  RawServer extends RawServerBase = RawServerDefault,
+  RawRequest extends RawRequestDefaultExpression<RawServer> = RawRequestDefaultExpression<RawServer>,
+  RawReply extends RawReplyDefaultExpression<RawServer> = RawReplyDefaultExpression<RawServer>,
+  RouteGeneric extends RouteGenericInterface = RouteGenericInterface,
+  ContextConfig = ContextConfigDefault,
+  SchemaCompiler extends FastifySchema = FastifySchema,
+  TypeProvider extends FastifyTypeProvider = FastifyTypeProviderDefault,
+  Logger extends FastifyBaseLogger = FastifyBaseLogger
+> {
+  (
+    this: FastifyInstance<RawServer, RawRequest, RawReply, Logger, TypeProvider>,
+    request: FastifyRequest<RouteGeneric, RawServer, RawRequest, SchemaCompiler, TypeProvider, ContextConfig, Logger>,
+    reply: FastifyReply<RouteGeneric, RawServer, RawRequest, RawReply, ContextConfig, SchemaCompiler, TypeProvider>,
+    payload: PreResponseValidationPayload
+  ): Promise<unknown>;
+}
+
+// helper type which infers whether preResponseValidationHookHandler or preResponseValidationAsyncHookHandler are
+// applicable based on the specified return type.
+export type preResponseValidationMetaHookHandler<
+  PreResponseValidationPayload = unknown,
+  RawServer extends RawServerBase = RawServerDefault,
+  RawRequest extends RawRequestDefaultExpression<RawServer> = RawRequestDefaultExpression<RawServer>,
+  RawReply extends RawReplyDefaultExpression<RawServer> = RawReplyDefaultExpression<RawServer>,
+  RouteGeneric extends RouteGenericInterface = RouteGenericInterface,
+  ContextConfig = ContextConfigDefault,
+  SchemaCompiler extends FastifySchema = FastifySchema,
+  TypeProvider extends FastifyTypeProvider = FastifyTypeProviderDefault,
+  Logger extends FastifyBaseLogger = FastifyBaseLogger,
+  Return extends ReturnType<preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest,
+    RawReply, RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
+    | ReturnType<preResponseValidationAsyncHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply,
+    RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
+  = ReturnType<preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply,
+    RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
+> = Return extends ReturnType<preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply,
+  RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>>
+  ? preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply, RouteGeneric,
+    ContextConfig, SchemaCompiler, TypeProvider, Logger>
+  : preResponseValidationAsyncHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply, RouteGeneric,
+    ContextConfig, SchemaCompiler, TypeProvider, Logger>
+
+/**
  * You can change the payload with the `onSend` hook. It is the sixth hook to be executed in the request lifecycle. The previous hook was `preSerialization`, the next hook will be `onResponse`.
  * Note: If you change the payload, you may only change it to a string, a Buffer, a stream, or null.
  */
@@ -680,6 +750,7 @@ export type LifecycleHook = 'onRequest'
   | 'preValidation'
   | 'preHandler'
   | 'preSerialization'
+  | 'preResponseValidation'
   | 'onSend'
   | 'onResponse'
   | 'onRequest'
@@ -697,19 +768,21 @@ export type LifecycleHookLookup<K extends LifecycleHook> = K extends 'onRequest'
         ? preHandlerHookHandler
         : K extends 'preSerialization'
           ? preSerializationHookHandler
-          : K extends 'onSend'
-            ? onSendHookHandler
-            : K extends 'onResponse'
-              ? onResponseHookHandler
-              : K extends 'onRequest'
-                ? onRequestHookHandler
-                : K extends 'onError'
-                  ? onErrorHookHandler
-                  : K extends 'onTimeout'
-                    ? onTimeoutHookHandler
-                    : K extends 'onRequestAbort'
-                      ? onRequestAbortHookHandler
-                      : never
+          : K extends 'preResponseValidation'
+            ? preResponseValidationHookHandler
+            : K extends 'onSend'
+              ? onSendHookHandler
+              : K extends 'onResponse'
+                ? onResponseHookHandler
+                : K extends 'onRequest'
+                  ? onRequestHookHandler
+                  : K extends 'onError'
+                    ? onErrorHookHandler
+                    : K extends 'onTimeout'
+                      ? onTimeoutHookHandler
+                      : K extends 'onRequestAbort'
+                        ? onRequestAbortHookHandler
+                        : never
 
 export type LifecycleHookAsyncLookup<K extends LifecycleHook> = K extends 'onRequest'
   ? onRequestAsyncHookHandler
@@ -721,19 +794,21 @@ export type LifecycleHookAsyncLookup<K extends LifecycleHook> = K extends 'onReq
         ? preHandlerAsyncHookHandler
         : K extends 'preSerialization'
           ? preSerializationAsyncHookHandler
-          : K extends 'onSend'
-            ? onSendAsyncHookHandler
-            : K extends 'onResponse'
-              ? onResponseAsyncHookHandler
-              : K extends 'onRequest'
-                ? onRequestAsyncHookHandler
-                : K extends 'onError'
-                  ? onErrorAsyncHookHandler
-                  : K extends 'onTimeout'
-                    ? onTimeoutAsyncHookHandler
-                    : K extends 'onRequestAbort'
-                      ? onRequestAbortAsyncHookHandler
-                      : never
+          : K extends 'preResponseValidation'
+            ? preResponseValidationAsyncHookHandler
+            : K extends 'onSend'
+              ? onSendAsyncHookHandler
+              : K extends 'onResponse'
+                ? onResponseAsyncHookHandler
+                : K extends 'onRequest'
+                  ? onRequestAsyncHookHandler
+                  : K extends 'onError'
+                    ? onErrorAsyncHookHandler
+                    : K extends 'onTimeout'
+                      ? onTimeoutAsyncHookHandler
+                      : K extends 'onRequestAbort'
+                        ? onRequestAbortAsyncHookHandler
+                        : never
 
 // Application Hooks
 

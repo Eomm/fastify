@@ -5,7 +5,7 @@ import * as http from 'node:http'
 import { AddressInfo } from 'node:net'
 import { FastifyRouterOptions } from '../fastify'
 import { AddContentTypeParser, ConstructorAction, FastifyBodyParser, ProtoAction, getDefaultJsonParser, hasContentTypeParser, removeAllContentTypeParsers, removeContentTypeParser } from './content-type-parser'
-import { ApplicationHook, HookAsyncLookup, HookLookup, LifecycleHook, onCloseAsyncHookHandler, onCloseHookHandler, onErrorAsyncHookHandler, onErrorHookHandler, onListenAsyncHookHandler, onListenHookHandler, onReadyAsyncHookHandler, onReadyHookHandler, onRegisterHookHandler, onRequestAbortAsyncHookHandler, onRequestAbortHookHandler, onRequestAsyncHookHandler, onRequestHookHandler, onResponseAsyncHookHandler, onResponseHookHandler, onRouteHookHandler, onSendAsyncHookHandler, onSendHookHandler, onTimeoutAsyncHookHandler, onTimeoutHookHandler, preCloseAsyncHookHandler, preCloseHookHandler, preHandlerAsyncHookHandler, preHandlerHookHandler, preParsingAsyncHookHandler, preParsingHookHandler, preSerializationAsyncHookHandler, preSerializationHookHandler, preValidationAsyncHookHandler, preValidationHookHandler } from './hooks'
+import { ApplicationHook, HookAsyncLookup, HookLookup, LifecycleHook, onCloseAsyncHookHandler, onCloseHookHandler, onErrorAsyncHookHandler, onErrorHookHandler, onListenAsyncHookHandler, onListenHookHandler, onReadyAsyncHookHandler, onReadyHookHandler, onRegisterHookHandler, onRequestAbortAsyncHookHandler, onRequestAbortHookHandler, onRequestAsyncHookHandler, onRequestHookHandler, onResponseAsyncHookHandler, onResponseHookHandler, onRouteHookHandler, onSendAsyncHookHandler, onSendHookHandler, onTimeoutAsyncHookHandler, onTimeoutHookHandler, preCloseAsyncHookHandler, preCloseHookHandler, preHandlerAsyncHookHandler, preHandlerHookHandler, preParsingAsyncHookHandler, preParsingHookHandler, preSerializationAsyncHookHandler, preSerializationHookHandler, preResponseValidationAsyncHookHandler, preResponseValidationHookHandler, preValidationAsyncHookHandler, preValidationHookHandler } from './hooks'
 import { FastifyBaseLogger, FastifyChildLoggerFactory } from './logger'
 import { FastifyRegister } from './register'
 import { FastifyReply } from './reply'
@@ -326,6 +326,30 @@ export interface FastifyInstance<
       RawServer, RawRequest, RawReply, RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider,
       Logger> : preSerializationHookHandler<PreSerializationPayload, RawServer, RawRequest, RawReply, RouteGeneric,
       ContextConfig, SchemaCompiler, TypeProvider, Logger> : Fn,
+  ): FastifyInstance<RawServer, RawRequest, RawReply, Logger, TypeProvider>;
+
+  /**
+   * `preResponseValidation` is the hook that runs after the handler returned the payload and before the
+   * payload is validated against `schema.response`.
+   *  Note: the hook is NOT called if the payload is a string, a Buffer, an ArrayBuffer, a stream or a Response.
+   */
+  addHook<
+    PreResponseValidationPayload = unknown,
+    RouteGeneric extends RouteGenericInterface = RouteGenericInterface,
+    ContextConfig = ContextConfigDefault,
+    SchemaCompiler extends FastifySchema = FastifySchema,
+    Logger extends FastifyBaseLogger = FastifyBaseLogger,
+    Fn extends preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest, RawReply,
+      RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger> | preResponseValidationAsyncHookHandler<
+      PreResponseValidationPayload, RawServer, RawRequest, RawReply, RouteGeneric, ContextConfig, SchemaCompiler,
+      TypeProvider, Logger> = preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest,
+      RawReply, RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger>
+  >(
+    name: 'preResponseValidation',
+    hook: Fn extends unknown ? Fn extends AsyncFunction ? preResponseValidationAsyncHookHandler<
+      PreResponseValidationPayload, RawServer, RawRequest, RawReply, RouteGeneric, ContextConfig, SchemaCompiler,
+      TypeProvider, Logger> : preResponseValidationHookHandler<PreResponseValidationPayload, RawServer, RawRequest,
+      RawReply, RouteGeneric, ContextConfig, SchemaCompiler, TypeProvider, Logger> : Fn,
   ): FastifyInstance<RawServer, RawRequest, RawReply, Logger, TypeProvider>;
 
   /**

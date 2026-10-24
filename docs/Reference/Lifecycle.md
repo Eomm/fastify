@@ -32,6 +32,10 @@ Incoming Request
                                                     │
                                                     └─▶ Reply
                                                           │
+                                                4**/5** ◀─┴─▶ preResponseValidation Hook
+                                                                │
+                                                4**/5** ◀─┴─▶ Validation
+                                                                │
                                                 4**/5** ◀─┴─▶ preSerialization Hook
                                                                 │
                                                                 └─▶ onSend Hook
@@ -40,6 +44,11 @@ Incoming Request
                                                                             │
                                                                             └─▶ onResponse Hook
 ```
+
+The response payload is validated against the route's `schema.response` between
+the `preResponseValidation` hook and the `preSerialization` hook. A reply that
+is handled by a custom reply serializer skips that validation step: the custom
+serializer owns the wire format.
 
 When [`handlerTimeout`](./Server.md#factory-handler-timeout) is configured, a
 timer starts after routing. If the response is not sent within the allowed time,

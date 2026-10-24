@@ -1068,3 +1068,251 @@ test('the response schema lookup looks into the bucket selected by the symbol', 
   )
   t.assert.strictEqual(getResponseSchemaEntry({}, 200, 'application/json'), false)
 })
+
+test('the user customOptions reach the output pool and win over the framework defaults', async (t) => {
+  const responseSchema = {
+    200: {
+      type: 'object',
+      properties: {
+        hello: { type: 'string' },
+        world: { type: 'number' }
+      }
+    }
+  }
+
+  // The route declares two independent violations: the payload has a string
+  // where a number is expected and a number where a string is expected.
+  const run = async (outputValidatorOptions) => {
+    const errors = []
+    const fastify = Fastify({
+      schemaController: { outputValidatorOptions }
+    })
+
+    fastify.addHook('onError', (request, reply, error, done) => {
+      errors.push(error)
+      done()
+    })
+
+    fastify.get('/', {
+      schema: { response: responseSchema }
+    }, async () => ({ hello: 42, world: 'not a number' }))
+
+    const fastifyServer = await fastify.listen({ port: 0 })
+    const result = await fetch(fastifyServer + '/')
+    const body = await result.text()
+    await fastify.close()
+
+    return { status: result.status, body, errors }
+  }
+
+  const withDefaults = await run(undefined)
+  t.assert.strictEqual(withDefaults.status, 500)
+  t.assert.strictEqual(withDefaults.errors.length, 1)
+  t.assert.strictEqual(
+    withDefaults.errors[0].validation.length,
+    1,
+    'the framework default reports the first violation only'
+  )
+  t.assert.strictEqual(withDefaults.errors[0].validationContext, 'response')
+
+  const withUserOptions = await run({ customOptions: { allErrors: true } })
+  t.assert.strictEqual(withUserOptions.status, 500)
+  t.assert.strictEqual(withUserOptions.errors.length, 1)
+  t.assert.strictEqual(
+    withUserOptions.errors[0].validation.length,
+    2,
+    'the user option reports every violation'
+  )
+  t.assert.deepStrictEqual(
+    withUserOptions.errors[0].validation.map((error) => error.instancePath).sort(),
+    ['/hello', '/world']
+  )
+  t.assert.strictEqual(withUserOptions.errors[0].validationContext, 'response')
+  t.assert.deepStrictEqual(JSON.parse(withUserOptions.body), {
+    statusCode: 500,
+    code: 'FST_ERR_OUTPUT_VALIDATION',
+    error: 'Internal Server Error',
+    message: 'Response validation failed. Errors: /hello must be string; /world must be number'
+  })
+})
+
+test('a user supplied buildOutputValidator replaces the default output factory', async (t) => {
+  const factoryCalls = []
+  const compilerCalls = []
+  let validatorCalls = 0
+
+  const fastify = Fastify({
+    exposeHeadRoutes: false,
+    schemaController: {
+      outputValidatorOptions: { customOptions: { allErrors: true } },
+      compilersFactory: {
+        buildOutputValidator (externalSchemas, outputValidatorOptions) {
+          factoryCalls.push({ externalSchemas, outputValidatorOptions })
+          return function compileOutputValidator ({ schema, method, url, httpStatus, contentType }) {
+            compilerCalls.push({ schema, method, url, httpStatus, contentType })
+            return function validateOutput (data) {
+              validatorCalls++
+              if (data && data.hello === 'invalid') {
+                validateOutput.errors = [{
+                  instancePath: '/hello',
+                  schemaPath: '#/properties/hello/type',
+                  params: { type: 'string' },
+                  message: 'must be string'
+                }]
+                return false
+              }
+              return true
+            }
+          }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  const responseSchema = {
+    200: {
+      type: 'object',
+      properties: { hello: { type: 'string' } }
+    }
+  }
+
+  fastify.get('/valid', { schema: { response: responseSchema } }, async () => ({ hello: 'world' }))
+
+  // The payload violates the response schema, but the validator of the user
+  // accepts it: the default output factory is not installed next to the
+  // factory of the user.
+  fastify.get('/wrong-type', { schema: { response: responseSchema } }, async () => ({ hello: 42 }))
+
+  fastify.get('/invalid', { schema: { response: responseSchema } }, async () => ({ hello: 'invalid' }))
+
+  fastify.get('/content', {
+    schema: {
+      response: {
+        200: {
+          content: {
+            'application/json': { schema: { type: 'object', properties: { hello: { type: 'string' } } } }
+          }
+        }
+      }
+    }
+  }, async () => ({ hello: 'world' }))
+
+  await fastify.ready()
+
+  t.assert.strictEqual(factoryCalls.length, 1, 'the factory is called once, when the pool is built')
+  t.assert.deepStrictEqual(
+    factoryCalls[0].outputValidatorOptions,
+    { customOptions: { allErrors: true } },
+    'the factory receives the user options'
+  )
+
+  t.assert.strictEqual(compilerCalls.length, 4, 'the compiler is called once per status code and media type')
+  t.assert.deepStrictEqual(
+    compilerCalls.map((call) => [call.url, call.method, call.httpStatus, call.contentType]),
+    [
+      ['/valid', 'GET', '200', undefined],
+      ['/wrong-type', 'GET', '200', undefined],
+      ['/invalid', 'GET', '200', undefined],
+      ['/content', 'GET', '200', 'application/json']
+    ]
+  )
+
+  const fastifyServer = await fastify.listen({ port: 0 })
+
+  const valid = await fetch(fastifyServer + '/valid')
+  t.assert.strictEqual(valid.status, 200)
+  t.assert.deepStrictEqual(JSON.parse(await valid.text()), { hello: 'world' })
+
+  const wrongType = await fetch(fastifyServer + '/wrong-type')
+  t.assert.strictEqual(wrongType.status, 200, 'the validator of the user accepts the payload')
+  // The bytes on the wire are still produced by `fast-json-stringify`: the
+  // serializer of the framework shapes the payload, the validator of the user
+  // decides whether the payload is accepted.
+  t.assert.deepStrictEqual(JSON.parse(await wrongType.text()), { hello: '42' })
+
+  const content = await fetch(fastifyServer + '/content')
+  t.assert.strictEqual(content.status, 200)
+
+  const invalid = await fetch(fastifyServer + '/invalid')
+  t.assert.strictEqual(invalid.status, 500)
+  const invalidBody = await invalid.text()
+  t.assert.deepStrictEqual(JSON.parse(invalidBody), {
+    statusCode: 500,
+    code: 'FST_ERR_OUTPUT_VALIDATION',
+    error: 'Internal Server Error',
+    message: 'Response validation failed. Errors: /hello must be string'
+  })
+
+  t.assert.strictEqual(compilerCalls.length, 4, 'the compiler is not called again at request time')
+  t.assert.strictEqual(validatorCalls, 4, 'the validator runs on every response')
+})
+
+test('the user factory resolves the shared schema documents in its own pool', async (t) => {
+  const Ajv = require('ajv').default
+  let factoryCalls = 0
+  const factoryDocuments = []
+  const factoryOptions = []
+
+  const fastify = Fastify({
+    exposeHeadRoutes: false,
+    schemaController: {
+      outputValidatorOptions: { customOptions: { allErrors: true } },
+      compilersFactory: {
+        buildOutputValidator (externalSchemas, outputValidatorOptions) {
+          factoryCalls++
+          factoryDocuments.push(externalSchemas)
+          factoryOptions.push(outputValidatorOptions)
+          const ajv = new Ajv({ allErrors: true })
+          for (const externalSchema of Object.values(externalSchemas)) {
+            ajv.addSchema(externalSchema)
+          }
+          return function compileOutputValidator ({ schema }) {
+            return ajv.compile(schema)
+          }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test/asset.json',
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    properties: {
+      id: { type: 'string' }
+    },
+    required: ['id']
+  })
+
+  fastify.get('/asset', {
+    schema: {
+      response: {
+        200: { $ref: 'http://fastify.test/asset.json#' }
+      }
+    }
+  }, async () => ({ id: 42 }))
+
+  await fastify.ready()
+  t.assert.strictEqual(factoryCalls, 1)
+  t.assert.ok(
+    factoryDocuments[0]['http://fastify.test/asset.json'],
+    'the factory receives the shared schema documents'
+  )
+  t.assert.deepStrictEqual(
+    factoryOptions[0],
+    { customOptions: { allErrors: true } },
+    'the factory receives the user options'
+  )
+
+  const fastifyServer = await fastify.listen({ port: 0 })
+  const result = await fetch(fastifyServer + '/asset')
+  t.assert.strictEqual(result.status, 500)
+  t.assert.deepStrictEqual(JSON.parse(await result.text()), {
+    statusCode: 500,
+    code: 'FST_ERR_OUTPUT_VALIDATION',
+    error: 'Internal Server Error',
+    message: 'Response validation failed. Errors: /id must be string'
+  })
+})

@@ -177,6 +177,10 @@ fastify.addHook('preResponseValidation', async (request, reply, payload) => {
 The payload the hook produces is validated as well: the hook cannot smuggle an
 invalid field past the validation.
 
+> ℹ️ Note:
+> The [`preSerialization`](#preserialization) hook runs *after* the validation:
+> a payload that a `preSerialization` hook adds or changes is **not** validated.
+
 > ⚠️ Warning:
 > A custom `reply.serializer(fn)` **disables the response validation** for
 > that reply. The `preResponseValidation` hook still runs, but the payload it

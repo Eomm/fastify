@@ -1345,6 +1345,11 @@ test('an output validator that resolves false fails the response', async (t) => 
   t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
   t.assert.deepStrictEqual(capturedError.validation, [])
   t.assert.strictEqual(capturedError.validationContext, 'response')
+  t.assert.strictEqual(
+    body.message,
+    'Response validation failed.',
+    'the message does not end with an empty list of errors'
+  )
 })
 
 test('the output validator options given to setSchemaController reach the output pool', async (t) => {

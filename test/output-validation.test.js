@@ -216,6 +216,270 @@ test('a response that violates the response schema fails with FST_ERR_OUTPUT_VAL
   })
 })
 
+test('the output pool never coerces a wrongly typed response value', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            count: { type: 'number' }
+          }
+        }
+      }
+    }
+  }, async () => ({ count: '42' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.strictEqual(body.statusCode, 500)
+  t.assert.ok(!result.payload.includes('42'), 'the value has not been coerced')
+  t.assert.strictEqual(body.message, 'Response validation failed. Errors: /count must be number')
+})
+
+test('the output pool never injects a schema default into the response', async (t) => {
+  let payloadSeenByTheHook = null
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('preSerialization', (request, reply, payload, done) => {
+    payloadSeenByTheHook = payload
+    done(null, payload)
+  })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' },
+            count: { type: 'number', default: 42 }
+          }
+        }
+      }
+    }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  // The output validator runs with `useDefaults: false`: the payload it hands
+  // over to the `preSerialization` hooks does not carry the default.
+  t.assert.deepStrictEqual(payloadSeenByTheHook, { hello: 'world' })
+  t.assert.ok(!('count' in payloadSeenByTheHook), 'the default has not been injected')
+  // `fast-json-stringify` is still the serializer of this phase and it adds
+  // the default to the wire: the rule becomes observable on the bytes when
+  // the serializer is dropped.
+  t.assert.strictEqual(result.payload, '{"hello":"world","count":42}')
+})
+
+test('the output pool strips the properties that the response schema does not declare', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async () => ({ hello: 'world', extra: 'stripped' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, '{"hello":"world"}')
+  t.assert.ok(!result.payload.includes('stripped'), 'the undeclared property is gone')
+})
+
+test('a route without a response schema is not validated', async (t) => {
+  let built = 0
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          built++
+          return () => () => true
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.get('/', async () => ({ hello: 'world', extra: 'kept' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, '{"hello":"world","extra":"kept"}')
+  t.assert.strictEqual(built, 0, 'the output pool has not been built')
+})
+
+test('a response whose status code matches no entry is sent without validation', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(404).send({ message: 'not found' })
+  })
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 404)
+  t.assert.strictEqual(result.payload, '{"message":"not found"}')
+})
+
+test('a content type that the response schema does not declare fails closed', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  hello: { type: 'string' }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.type('application/vnd.api+json').send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN')
+  t.assert.strictEqual(body.statusCode, 500)
+})
+
+test('a content type that the response schema declares is validated', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          content: {
+            'application/vnd.api+json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  hello: { type: 'string' }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.type('application/vnd.api+json').send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, '{"hello":"world"}')
+})
+
+test('a content type covered by the catch all media type is validated', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          content: {
+            '*/*': {
+              schema: {
+                type: 'object',
+                properties: {
+                  hello: { type: 'string' }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.type('application/vnd.api+json').send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, '{"hello":"world"}')
+})
+
+test('a null payload is not validated', async (t) => {
+  let validated = 0
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => (payload) => {
+            validated++
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.send(null)
+  })
+
+  const result = await fastify.inject('/')
+  // The behaviour of the null payload is the one of `fast-json-stringify`
+  // today: it is not validated, so the payload keeps the body that the
+  // serializer produces for it.
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, '{}')
+  t.assert.strictEqual(validated, 0, 'the validator has never been invoked')
+})
+
 test('the output pool is seeded with the shared schema documents', async t => {
   const calls = []
   const fastify = Fastify({

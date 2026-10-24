@@ -54,6 +54,7 @@ expect(errorCodes.FST_ERR_BAD_TRAILER_VALUE).type.toBeAssignableTo<FastifyErrorC
 expect(errorCodes.FST_ERR_FAILED_ERROR_SERIALIZATION).type.toBeAssignableTo<FastifyErrorConstructor>()
 expect(errorCodes.FST_ERR_MISSING_SERIALIZATION_FN).type.toBeAssignableTo<FastifyErrorConstructor>()
 expect(errorCodes.FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN).type.toBeAssignableTo<FastifyErrorConstructor>()
+expect(errorCodes.FST_ERR_OUTPUT_VALIDATION).type.toBeAssignableTo<FastifyErrorConstructor>()
 expect(errorCodes.FST_ERR_REQ_INVALID_VALIDATION_INVOCATION).type.toBeAssignableTo<FastifyErrorConstructor>()
 expect(errorCodes.FST_ERR_SCH_MISSING_ID).type.toBeAssignableTo<FastifyErrorConstructor>()
 expect(errorCodes.FST_ERR_SCH_ALREADY_PRESENT).type.toBeAssignableTo<FastifyErrorConstructor>()

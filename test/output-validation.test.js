@@ -122,8 +122,9 @@ test('start server and run tests', async (t) => {
     t.assert.strictEqual(result.headers.get('content-length'), '' + body.length)
     t.assert.deepStrictEqual(JSON.parse(body), {
       statusCode: 500,
+      code: 'FST_ERR_OUTPUT_VALIDATION',
       error: 'Internal Server Error',
-      message: 'The value "world" cannot be converted to a number.'
+      message: 'Response validation failed. Errors: /hello must be number'
     })
   })
 
@@ -140,6 +141,78 @@ test('start server and run tests', async (t) => {
     const body = await result.text()
     t.assert.strictEqual(result.headers.get('content-length'), '' + body.length)
     t.assert.deepStrictEqual(JSON.parse(body), { hello: 'DOOM' })
+  })
+})
+
+test('a response that violates the response schema fails with FST_ERR_OUTPUT_VALIDATION', async (t) => {
+  let capturedError = null
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/wrong-type', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async () => ({ hello: 42 }))
+
+  fastify.get('/missing-property', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async () => ({}))
+
+  const fastifyServer = await fastify.listen({ port: 0 })
+
+  const result = await fetch(fastifyServer + '/wrong-type')
+  t.assert.ok(!result.ok)
+  t.assert.strictEqual(result.status, 500)
+  const body = await result.text()
+  t.assert.strictEqual(result.headers.get('content-length'), '' + body.length)
+  t.assert.deepStrictEqual(JSON.parse(body), {
+    statusCode: 500,
+    code: 'FST_ERR_OUTPUT_VALIDATION',
+    error: 'Internal Server Error',
+    message: 'Response validation failed. Errors: /hello must be string'
+  })
+
+  t.assert.ok(capturedError, 'the error hook received the error')
+  t.assert.strictEqual(capturedError.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.strictEqual(capturedError.statusCode, 500)
+  t.assert.ok(Array.isArray(capturedError.validation), 'the error carries the Ajv errors')
+  t.assert.strictEqual(capturedError.validation.length, 1)
+  t.assert.strictEqual(capturedError.validation[0].instancePath, '/hello')
+  t.assert.strictEqual(capturedError.validation[0].message, 'must be string')
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+
+  const missing = await fetch(fastifyServer + '/missing-property')
+  t.assert.strictEqual(missing.status, 500)
+  const missingBody = await missing.text()
+  t.assert.deepStrictEqual(JSON.parse(missingBody), {
+    statusCode: 500,
+    code: 'FST_ERR_OUTPUT_VALIDATION',
+    error: 'Internal Server Error',
+    message: 'Response validation failed. Errors: must have required property \'hello\''
   })
 })
 

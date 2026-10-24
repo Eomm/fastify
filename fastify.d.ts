@@ -155,7 +155,9 @@ declare namespace fastify {
       compilersFactory?: {
         buildValidator?: ValidatorFactory;
         buildSerializer?: SerializerFactory;
+        buildOutputValidator?: ValidatorFactory;
       };
+      outputValidatorOptions?: Parameters<BuildCompilerFromPool>[1];
     };
     return503OnClosing?: boolean,
     ajv?: Parameters<BuildCompilerFromPool>[1],

@@ -1,6 +1,8 @@
 'use strict'
 
 const { test } = require('node:test')
+const Fastify = require('..')
+const { kSchemaController, kOptions } = require('../lib/symbols')
 const fastify = require('..')()
 
 const opts = {
@@ -137,4 +139,125 @@ test('start server and run tests', async (t) => {
     t.assert.strictEqual(result.headers.get('content-length'), '' + body.length)
     t.assert.deepStrictEqual(JSON.parse(body), { hello: 'DOOM' })
   })
+})
+
+test('the output pool is seeded with the shared schema documents', async t => {
+  const calls = []
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator (externalSchemas, outputValidatorOptions) {
+          calls.push({ externalSchemas, outputValidatorOptions })
+          return () => () => true
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'shared',
+    type: 'object',
+    properties: { hello: { type: 'string' } }
+  })
+
+  const controller = fastify[kSchemaController]
+  controller.setupOutputValidator(fastify[kOptions])
+
+  t.assert.strictEqual(calls.length, 1)
+  t.assert.ok(calls[0].externalSchemas.shared, 'the shared document is part of the pool')
+  t.assert.strictEqual(calls[0].externalSchemas.shared.$id, 'shared')
+  t.assert.deepStrictEqual(calls[0].externalSchemas.shared.properties, { hello: { type: 'string' } })
+})
+
+test('the output pool receives the user outputValidatorOptions', async t => {
+  const calls = []
+  const fastify = Fastify({
+    schemaController: {
+      outputValidatorOptions: {
+        customOptions: { strict: true }
+      },
+      compilersFactory: {
+        buildOutputValidator (externalSchemas, outputValidatorOptions) {
+          calls.push({ externalSchemas, outputValidatorOptions })
+          return () => () => true
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  const controller = fastify[kSchemaController]
+  controller.setupOutputValidator(fastify[kOptions])
+
+  t.assert.strictEqual(calls.length, 1)
+  t.assert.deepStrictEqual(calls[0].outputValidatorOptions, { customOptions: { strict: true } })
+})
+
+test('the output pool does not lint the response schema by default', async t => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const controller = fastify[kSchemaController]
+  controller.setupOutputValidator(fastify[kOptions])
+
+  t.assert.doesNotThrow(() => controller.outputValidatorCompiler({
+    schema: { type: 'object', whatever: 'need to be parsed by the custom serializer' },
+    url: '/',
+    method: 'GET',
+    httpStatus: '200'
+  }))
+})
+
+test('the user customOptions win over the framework defaults', async t => {
+  const fastify = Fastify({
+    schemaController: {
+      outputValidatorOptions: {
+        customOptions: { strict: true }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  const controller = fastify[kSchemaController]
+  controller.setupOutputValidator(fastify[kOptions])
+
+  t.assert.throws(() => controller.outputValidatorCompiler({
+    schema: { type: 'object', whatever: 'need to be parsed by the custom serializer' },
+    url: '/',
+    method: 'GET',
+    httpStatus: '200'
+  }))
+})
+
+test('the output pool is built once', async t => {
+  const calls = []
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator (externalSchemas, outputValidatorOptions) {
+          calls.push({ externalSchemas, outputValidatorOptions })
+          return () => () => true
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  const controller = fastify[kSchemaController]
+  controller.setupOutputValidator(fastify[kOptions])
+  controller.setupOutputValidator(fastify[kOptions])
+
+  t.assert.strictEqual(calls.length, 1)
+})
+
+test('the output side keeps its own schemas bucket', async t => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const controller = fastify[kSchemaController]
+  fastify.addSchema({ $id: 'shared', type: 'object' })
+
+  t.assert.ok(controller.getSchemas().shared, 'the input bucket holds the shared document')
+  t.assert.deepStrictEqual(controller.getOutputSchemas(), {}, 'the output bucket is a bucket of its own')
 })

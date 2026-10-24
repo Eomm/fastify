@@ -52,7 +52,7 @@ It is easy to understand where each hook is executed by looking at the
 Hooks are affected by Fastify's encapsulation, and can thus be applied to
 selected routes. See the [Scopes](#scope) section for more information.
 
-There are ten different hooks that you can use in Request/Reply *(in order of
+There are eleven different hooks that you can use in Request/Reply *(in order of
 execution)*:
 
 ### onRequest
@@ -153,6 +153,7 @@ fastify.addHook('preHandler', async (request, reply) => {
   await asyncMethod()
 })
 ```
+
 ### preResponseValidation
 
 The `preResponseValidation` hook runs after the handler has returned the

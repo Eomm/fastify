@@ -934,6 +934,181 @@ test('Reply serializer win over serializer ', (t, testDone) => {
   })
 })
 
+// The output validation is skipped when a custom serializer owns the wire
+// format: the payload is handed over to the serializer untouched and the
+// response keeps the status code the handler chose.
+const outputValidationSchema = {
+  response: {
+    200: {
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+const invalidPayload = { name: 42, nick: 'Boo' }
+
+test('The reply serializer wins over the output validator', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.serializer(function (payload) {
+      t.assert.deepStrictEqual(payload, invalidPayload)
+      return 'reply serializator'
+    })
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'reply serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('The instance reply serializer wins over the output validator', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+  fastify.setReplySerializer(function (payload) {
+    t.assert.deepStrictEqual(payload, invalidPayload)
+    return 'instance serializator'
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'instance serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('The output validation fails closed when no custom serializer is installed', (t, testDone) => {
+  t.plan(3)
+
+  const fastify = Fastify()
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.statusCode, 500)
+    t.assert.strictEqual(JSON.parse(res.payload).code, 'FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN')
+    testDone()
+  })
+})
+
+test('A serializer installed by a preHandler hook skips the output validation', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+
+  fastify.addHook('preHandler', function (request, reply, done) {
+    reply.serializer(function (payload) {
+      t.assert.deepStrictEqual(payload, invalidPayload)
+      return 'preHandler serializator'
+    })
+    done()
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'preHandler serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('A serializer installed by a preValidation hook skips the output validation', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+
+  fastify.addHook('preValidation', function (request, reply, done) {
+    reply.serializer(function (payload) {
+      t.assert.deepStrictEqual(payload, invalidPayload)
+      return 'preValidation serializator'
+    })
+    done()
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'preValidation serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
 test('The schema compiler recreate itself if needed', (t, testDone) => {
   t.plan(1)
   const fastify = Fastify()

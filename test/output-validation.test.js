@@ -480,6 +480,155 @@ test('a null payload is not validated', async (t) => {
   t.assert.strictEqual(validated, 0, 'the validator has never been invoked')
 })
 
+test('an async response schema is awaited and its rejection fails the response', async (t) => {
+  let capturedError = null
+  const fastify = Fastify({
+    schemaController: {
+      outputValidatorOptions: {
+        plugins: [
+          (ajv) => {
+            ajv.addKeyword({
+              keyword: 'isEven',
+              async: true,
+              validate: async (schema, data) => {
+                await new Promise(resolve => setImmediate(resolve))
+                return data % 2 === 0
+              }
+            })
+          }
+        ]
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  // The unique shared document makes the key of the output pool unique, so
+  // that this server owns an Ajv instance built with the plugin above.
+  fastify.addSchema({ $id: 'http://fastify.test/async-output-fixture.json', type: 'object' })
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  const schema = {
+    $async: true,
+    type: 'object',
+    properties: {
+      count: { type: 'number', isEven: true }
+    }
+  }
+
+  fastify.get('/valid', { schema: { response: { 200: schema } } }, async () => ({ count: 4 }))
+  fastify.get('/invalid', { schema: { response: { 200: schema } } }, async () => ({ count: 3 }))
+
+  const valid = await fastify.inject('/valid')
+  t.assert.strictEqual(valid.statusCode, 200)
+  t.assert.strictEqual(valid.payload, '{"count":4}')
+
+  // The keyword is really registered: the payload that violates it is
+  // rejected, the case cannot pass vacuously.
+  const invalid = await fastify.inject('/invalid')
+  t.assert.strictEqual(invalid.statusCode, 500)
+  const body = JSON.parse(invalid.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.strictEqual(body.statusCode, 500)
+  t.assert.ok(capturedError, 'the error hook received the error')
+  t.assert.ok(Array.isArray(capturedError.validation), 'the error carries the Ajv errors')
+  t.assert.strictEqual(capturedError.validation.length, 1)
+  t.assert.strictEqual(capturedError.validation[0].instancePath, '/count')
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+})
+
+test('the output validation awaits a validator that returns a promise', async (t) => {
+  let resolved = false
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => async () => {
+            await new Promise(resolve => setTimeout(resolve, 20))
+            resolved = true
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'object', properties: { hello: { type: 'string' } } } } }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, '{"hello":"world"}')
+  t.assert.ok(resolved, 'the response has been sent after the promise settled')
+})
+
+test('a rejected output validator that carries an Ajv error array fails the response', async (t) => {
+  let capturedError = null
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => async () => {
+            const error = new Error('validation failed')
+            error.errors = [{ instancePath: '/hello', message: 'must be string' }]
+            throw error
+          }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'object' } } }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.strictEqual(body.message, 'Response validation failed. Errors: /hello must be string')
+  t.assert.deepStrictEqual(capturedError.validation, [{ instancePath: '/hello', message: 'must be string' }])
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+})
+
+test('an output validator that throws an unrelated error is not relabelled', async (t) => {
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            const error = new Error('the validator is broken')
+            error.statusCode = 503
+            throw error
+          }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'object' } } }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 503)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.message, 'the validator is broken')
+  t.assert.strictEqual(body.code, undefined, 'the error has not been relabelled')
+})
+
 test('the output pool is seeded with the shared schema documents', async t => {
   const calls = []
   const fastify = Fastify({

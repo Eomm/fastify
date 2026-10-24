@@ -1316,3 +1316,72 @@ test('the user factory resolves the shared schema documents in its own pool', as
     message: 'Response validation failed. Errors: /id must be string'
   })
 })
+
+test('an output validator that resolves false fails the response', async (t) => {
+  let capturedError = null
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => async () => false
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'object', properties: { hello: { type: 'string' } } } } }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.deepStrictEqual(capturedError.validation, [])
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+})
+
+test('the output validator options given to setSchemaController reach the output pool', async (t) => {
+  const errors = []
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.setSchemaController({
+    outputValidatorOptions: { customOptions: { allErrors: true } }
+  })
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    errors.push(error)
+    done()
+  })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' },
+            world: { type: 'number' }
+          }
+        }
+      }
+    }
+  }, async () => ({ hello: 42, world: 'not a number' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  t.assert.strictEqual(errors.length, 1)
+  t.assert.strictEqual(
+    errors[0].validation.length,
+    2,
+    'the option given to setSchemaController reports every violation'
+  )
+  t.assert.strictEqual(errors[0].validationContext, 'response')
+})

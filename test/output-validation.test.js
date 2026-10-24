@@ -264,6 +264,45 @@ test('the output side keeps its own schemas bucket', async t => {
   t.assert.deepStrictEqual(controller.getOutputSchemas(), {}, 'the output bucket is a bucket of its own')
 })
 
+test('the output bucket is allocated on demand and is a bucket of its own', async t => {
+  let builtBuckets = 0
+  const fastify = Fastify({
+    schemaController: {
+      bucket (storeInit) {
+        builtBuckets++
+        return {
+          add () {},
+          getSchema () {},
+          getSchemas () { return storeInit || {} }
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  const controller = fastify[kSchemaController]
+  t.assert.strictEqual(builtBuckets, 1, 'only the bucket of the input side is allocated')
+  t.assert.deepStrictEqual(controller.getOutputSchemas(), {}, 'the output side owns no document yet')
+
+  const outputBucket = controller.getOutputSchemaBucket()
+  t.assert.strictEqual(builtBuckets, 2, 'the bucket of the output side is allocated on demand')
+  t.assert.notStrictEqual(outputBucket, controller.schemaBucket, 'the output bucket is not the input bucket')
+  t.assert.deepStrictEqual(controller.getOutputSchemas(), {}, 'the output bucket is empty')
+})
+
+test('the output bucket of a child controller is seeded with the parent output documents', async t => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.register(async (instance) => {
+    const controller = instance[kSchemaController]
+    t.assert.ok(controller.getOutputSchemaBucket(), 'the child allocates its own output bucket')
+    t.assert.deepStrictEqual(controller.getOutputSchemas(), {}, 'the parent owns no output document')
+  })
+
+  await fastify.ready()
+})
+
 test('a response schema that references a shared schema resolves', async t => {
   const fastify = Fastify()
   t.after(() => fastify.close())
@@ -367,6 +406,28 @@ test('a response schema that cannot be compiled stops the registration', async t
   await t.assert.rejects(fastify.ready(), (err) => {
     t.assert.strictEqual(err.code, 'FST_ERR_SCH_SERIALIZATION_BUILD')
     t.assert.ok(err.message.includes('GET'), 'the error names the route')
+    return true
+  })
+})
+
+test('a response schema that the output pool cannot compile stops the registration', async t => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: { type: 'invalid-type' }
+      }
+    },
+    // The serializer of the route is provided by the user: the response
+    // schema is compiled by the output pool only.
+    serializerCompiler: () => () => JSON.stringify({ hello: 'world' })
+  }, async () => ({ hello: 'world' }))
+
+  await t.assert.rejects(fastify.ready(), (err) => {
+    t.assert.strictEqual(err.code, 'FST_ERR_SCH_SERIALIZATION_BUILD')
+    t.assert.ok(err.message.includes('Failed building the serialization schema'), 'the error carries the reason of the failure')
     return true
   })
 })

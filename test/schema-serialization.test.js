@@ -1109,6 +1109,29 @@ test('A serializer installed by a preValidation hook skips the output validation
   })
 })
 
+test('the error serializer falls back to the default one when the content type does not match', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const contentSchema = {
+    content: {
+      'text/plain': {
+        schema: { type: 'object' }
+      }
+    }
+  }
+
+  fastify.get('/exact', { schema: { response: { 500: contentSchema } } }, async () => { throw new Error('boom') })
+  fastify.get('/wildcard', { schema: { response: { '5xx': contentSchema } } }, async () => { throw new Error('boom') })
+  fastify.get('/default', { schema: { response: { default: contentSchema } } }, async () => { throw new Error('boom') })
+
+  for (const url of ['/exact', '/wildcard', '/default']) {
+    const res = await fastify.inject(url)
+    t.assert.strictEqual(res.statusCode, 500)
+    t.assert.strictEqual(JSON.parse(res.payload).message, 'boom')
+  }
+})
+
 test('The schema compiler recreate itself if needed', (t, testDone) => {
   t.plan(1)
   const fastify = Fastify()

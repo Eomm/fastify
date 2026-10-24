@@ -629,6 +629,36 @@ test('an output validator that throws an unrelated error is not relabelled', asy
   t.assert.strictEqual(body.code, undefined, 'the error has not been relabelled')
 })
 
+test('an output validator that returns false without an error array fails the response', async (t) => {
+  let capturedError = null
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => false
+        }
+      }
+    }
+  })
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'object', properties: { hello: { type: 'string' } } } } }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.deepStrictEqual(capturedError.validation, [])
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+})
+
 test('the output pool is seeded with the shared schema documents', async t => {
   const calls = []
   const fastify = Fastify({

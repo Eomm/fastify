@@ -275,9 +275,11 @@ test('01-01/T3: a user supplied compilersFactory.buildOutputValidator replaces t
             t.assert.strictEqual(httpStatus, '200')
             t.assert.strictEqual(contentType, undefined)
             // The parity rules are applied to the response schema before it
-            // is compiled: a property-less object schema gets an empty
-            // `properties` map, exactly as `fast-json-stringify` did.
-            t.assert.deepStrictEqual(schema, { type: 'object', properties: {} })
+            // is compiled: a property-less object schema gets an explicit
+            // `additionalProperties: false`, so that the validator drops
+            // every property of the payload, exactly as `fast-json-stringify`
+            // did.
+            t.assert.deepStrictEqual(schema, { type: 'object', additionalProperties: false })
             return (payload) => {
               calls.validator++
               return payload.accepted === true

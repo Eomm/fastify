@@ -133,8 +133,8 @@ test('the parity reaches every recursion keyword', async (t) => {
     { keyword: 'oneOf', schema: { oneOf: [{ type: 'object' }] }, path: ['oneOf', 0] },
     { keyword: 'not', schema: { not: { type: 'object' } }, path: ['not'] },
     { keyword: 'if', schema: { if: { type: 'object' } }, path: ['if'] },
-    { keyword: 'then', schema: { then: { type: 'object' } }, path: ['then'] },
-    { keyword: 'else', schema: { else: { type: 'object' } }, path: ['else'] },
+    { keyword: 'then', schema: { if: { type: 'object' }, then: { type: 'object' } }, path: ['then'] },
+    { keyword: 'else', schema: { if: { type: 'object' }, else: { type: 'object' } }, path: ['else'] },
     { keyword: 'dependentSchemas', schema: { dependentSchemas: { child: { type: 'object' } } }, path: ['dependentSchemas', 'child'] },
     { keyword: 'propertyNames', schema: { propertyNames: { type: 'object' } }, path: ['propertyNames'] },
     { keyword: '$defs', schema: { $defs: { child: { type: 'object' } } }, path: ['$defs', 'child'] },
@@ -147,6 +147,13 @@ test('the parity reaches every recursion keyword', async (t) => {
     'every keyword of the list has a case'
   )
 
+  // The subschemas of the keywords that only take part in the validation of
+  // the payload are never shaped: `fast-json-stringify` ignores them. The
+  // members of a composition keep every property: the composition decides
+  // what reaches the wire.
+  const validationOnly = new Set(['not', 'contains', 'dependentSchemas', 'if'])
+  const compositionMembers = new Set(['allOf', 'anyOf', 'oneOf', 'then', 'else'])
+
   for (const entry of cases) {
     const transformed = applyFjsObjectParity(entry.schema)
     let nested = transformed
@@ -155,7 +162,11 @@ test('the parity reaches every recursion keyword', async (t) => {
     }
     t.assert.deepStrictEqual(
       nested,
-      { type: 'object', properties: {} },
+      validationOnly.has(entry.keyword)
+        ? { type: 'object' }
+        : (compositionMembers.has(entry.keyword)
+            ? { type: 'object', additionalProperties: true }
+            : { type: 'object', additionalProperties: false }),
       `the parity reaches the subschema of "${entry.keyword}"`
     )
   }
@@ -192,8 +203,10 @@ test('the parity reaches the subschema of a keyword at runtime', async (t) => {
   const patternProperties = await request(t, fastify, '/pattern-properties')
   t.assert.strictEqual(patternProperties.payload, '{"xa":{}}')
 
+  // The `contains` keyword only takes part in the validation of the payload:
+  // `fast-json-stringify` ignores it, so the items keep their properties.
   const contains = await request(t, fastify, '/contains')
-  t.assert.strictEqual(contains.payload, '[{}]')
+  t.assert.strictEqual(contains.payload, '[{"nested":1}]')
 })
 
 test('the transform never mutates the schema it receives', async (t) => {
@@ -210,7 +223,7 @@ test('the transform never mutates the schema it receives', async (t) => {
   const transformed = applyFjsObjectParity(schema)
 
   t.assert.strictEqual(JSON.stringify(schema), snapshot, 'the schema of the user is untouched')
-  t.assert.deepStrictEqual(transformed.properties.child, { type: 'object', properties: {} })
+  t.assert.deepStrictEqual(transformed.properties.child, { type: 'object', additionalProperties: false })
   t.assert.notStrictEqual(transformed, schema, 'the transform returns a copy')
   t.assert.notStrictEqual(transformed.properties, schema.properties, 'the copy is deep')
   t.assert.notStrictEqual(transformed.required, schema.required, 'the copy is deep')
@@ -222,7 +235,7 @@ test('the transform leaves the schemas that are not object schemas alone', async
   t.assert.strictEqual(applyFjsObjectParity(null), null, 'a null schema is untouched')
   t.assert.deepStrictEqual(
     applyFjsObjectParity([{ type: 'object' }]),
-    [{ type: 'object', properties: {} }],
+    [{ type: 'object', additionalProperties: false }],
     'a list of schemas is transformed'
   )
   t.assert.deepStrictEqual(
@@ -232,8 +245,8 @@ test('the transform leaves the schemas that are not object schemas alone', async
   )
   t.assert.deepStrictEqual(
     applyFjsObjectParity({ type: 'object', properties: null }),
-    { type: 'object', properties: null },
-    'a malformed map keyword is untouched'
+    { type: 'object', properties: null, additionalProperties: false },
+    'a malformed map keyword is copied as it is'
   )
 })
 

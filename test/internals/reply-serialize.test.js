@@ -63,7 +63,7 @@ test('Reply#serialize is the alias of JSON.stringify', async t => {
   t.assert.strictEqual(res.payload, '{"hello":"world"}')
 })
 
-test('Reply#serialize honours a custom reply serializer', async t => {
+test('Reply#serialize is the JSON alias even with a custom reply serializer', async t => {
   t.plan(2)
 
   const fastify = Fastify()
@@ -71,7 +71,50 @@ test('Reply#serialize honours a custom reply serializer', async t => {
 
   fastify.get('/', async (request, reply) => {
     reply.serializer(payload => JSON.stringify({ serialized: payload }))
-    t.assert.strictEqual(reply.serialize({ hello: 'world' }), '{"serialized":{"hello":"world"}}')
+    t.assert.strictEqual(reply.serialize({ hello: 'world' }), '{"hello":"world"}')
+    return { hello: 'world' }
+  })
+
+  const res = await fastify.inject('/')
+  t.assert.strictEqual(res.payload, '{"serialized":{"hello":"world"}}')
+})
+
+test('Reply#serialize ignores the response schema of the route', async t => {
+  t.plan(2)
+
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    t.assert.strictEqual(reply.serialize({ hello: 'world', extra: true }), '{"hello":"world","extra":true}')
+    return { hello: 'world' }
+  })
+
+  const res = await fastify.inject('/')
+  t.assert.strictEqual(res.payload, '{"hello":"world"}')
+})
+
+test('Reply#serialize ignores the route level reply serializer', async t => {
+  t.plan(2)
+
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.setReplySerializer((payload) => JSON.stringify({ serialized: payload }))
+
+  fastify.get('/', async (request, reply) => {
+    t.assert.strictEqual(reply.serialize({ hello: 'world' }), '{"hello":"world"}')
     return { hello: 'world' }
   })
 

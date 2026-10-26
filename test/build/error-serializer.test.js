@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { loadESLint } = require('eslint')
 
-const { code } = require('../../build/build-error-serializer')
+const { code, assertPinnedVersion } = require('../../build/build-error-serializer')
 const upstreamPackage = require('fast-json-stringify/package.json')
 
 function unifyLineBreak (str) {
@@ -57,6 +57,28 @@ test('the generated code requires nothing outside the repository', async (t) => 
       'the generated error serializer must not require fast-json-stringify'
     )
   }
+})
+
+test('the devDependency of the upstream package is pinned to the vendored version', async (t) => {
+  t.plan(2)
+
+  // the generated file embeds the version and the inlined source of the
+  // upstream package: the devDependency must be pinned to the exact version
+  // the committed artefact was built from, so that a patch release of the
+  // upstream package cannot break the integrity gate
+  const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'))
+
+  t.assert.strictEqual(pkg.devDependencies['fast-json-stringify'], upstreamPackage.version)
+  t.assert.doesNotThrow(() => assertPinnedVersion(upstreamPackage.version, upstreamPackage.version))
+})
+
+test('the build fails when the installed version is not the pinned one', async (t) => {
+  t.plan(1)
+
+  t.assert.throws(
+    () => assertPinnedVersion('7.1.6', '7.1.5'),
+    { message: /the devDependency is pinned to '7\.1\.5'/ }
+  )
 })
 
 test('the generated code carries the upstream attribution', async (t) => {

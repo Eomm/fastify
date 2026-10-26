@@ -64,6 +64,12 @@ npm publish
 - `fast-json-stringify` is a development dependency: the build script
   `build/build-error-serializer.js` uses it to regenerate the committed
   `lib/error-serializer.js`. The runtime does not load it.
+- The `fast-json-stringify` devDependency is **pinned to an exact version**:
+  the generated `lib/error-serializer.js` embeds the version and the inlined
+  source of the upstream package, so a different version produces different
+  bytes and the integrity gate would fail. Bumping the pin requires
+  `npm install` and `npm run build:error-serializer` (and the commit of the
+  regenerated `lib/error-serializer.js`) before the release.
 - `npm run build:error-serializer` regenerates `lib/error-serializer.js`
   alone, `npm run build:validation` regenerates both generated files.
 - The generated `lib/error-serializer.js` is self contained: it does not

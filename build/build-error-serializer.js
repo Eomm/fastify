@@ -90,8 +90,39 @@ function buildHeader (version) {
 }
 /* c8 ignore stop */
 
+/**
+ * The version of the upstream package the committed artefact is built from.
+ *
+ * The devDependency is pinned to that **exact** version: the generated file
+ * embeds the version and the inlined source of the upstream package, so a
+ * patch release of the upstream package would change the bytes of the
+ * committed file and break the integrity gate.
+ */
+function readPinnedVersion () {
+  const pkgPath = path.join(__dirname, '..', 'package.json')
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+  return pkg.devDependencies[upstreamName]
+}
+
+/**
+ * The installed version of the upstream package must be the pinned one.
+ *
+ * @param {string} version the version of the installed upstream package
+ * @param {string} pinned the version the devDependency is pinned to
+ * @throws {Error} when the installed version is not the pinned one
+ */
+function assertPinnedVersion (version, pinned) {
+  if (version !== pinned) {
+    throw new Error(
+      `The installed version of '${upstreamName}' is '${version}' but the devDependency is pinned to '${pinned}'. ` +
+      `Install the pinned version ('npm install') and regenerate the committed artefact with 'npm run build:error-serializer'.`
+    )
+  }
+}
+
 function buildModuleCode () {
   const { version, source } = readUpstream()
+  assertPinnedVersion(version, readPinnedVersion())
   const standalone = FJS(schema, { mode: 'standalone' })
   const inlined = inlineSerializer(standalone, source)
 
@@ -123,7 +154,8 @@ if (require.main === module) {
   console.log(`Saved ${file} file successfully`)
 } else {
   module.exports = {
-    code: moduleCode
+    code: moduleCode,
+    assertPinnedVersion
   }
 }
 /* c8 ignore stop */

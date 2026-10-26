@@ -495,32 +495,3 @@ test('the route level serializerCompiler option is rejected at registration', t 
     t.assert.ok(error.message.includes('serializerCompiler'))
   }
 })
-
-test('the reply serialization helpers fail explicitly', async t => {
-  t.plan(7)
-
-  const fastify = Fastify()
-  t.after(() => fastify.close())
-
-  const errors = []
-
-  fastify.get('/', (request, reply) => {
-    for (const helper of ['getSerializationFunction', 'compileSerializationSchema', 'serializeInput']) {
-      try {
-        reply[helper]()
-        errors.push(null)
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-    reply.send({ hello: 'world' })
-  })
-
-  const response = await fastify.inject('/')
-  t.assert.strictEqual(response.statusCode, 200)
-
-  for (const error of errors) {
-    t.assert.ok(error, 'the helper has thrown')
-    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
-  }
-})

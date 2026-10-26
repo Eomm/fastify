@@ -474,8 +474,9 @@ test('setSerializerCompiler and the serializerCompiler accessor fail explicitly'
   }
 
   try {
-    fastify.serializerCompiler
-    t.assert.fail()
+    // The accessor must not expose a serializer compiler that does not exist.
+    const compiler = fastify.serializerCompiler
+    t.assert.fail(`the accessor returned ${compiler}`)
   } catch (error) {
     t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
   }

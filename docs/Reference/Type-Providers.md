@@ -120,12 +120,11 @@ $ npm i zod @fastify/type-provider-zod
 
 ```typescript
 import fastify from 'fastify'
-import { ZodTypeProvider, serializerCompiler, validatorCompiler } from '@fastify/type-provider-zod'
+import { ZodTypeProvider, validatorCompiler } from '@fastify/type-provider-zod'
 import { z } from 'zod/v4'
 
 const server = fastify()
 server.setValidatorCompiler(validatorCompiler)
-server.setSerializerCompiler(serializerCompiler)
 
 server.withTypeProvider<ZodTypeProvider>().get('/route', {
   schema: {
@@ -298,3 +297,18 @@ export function registerRoutes(fastify: FastifyTypebox): void {
   });
 }
 ```
+
+### Removed in v6
+<a id="removed-in-v6"></a>
+
+The serializer compiler of the type providers is gone with
+`fast-json-stringify`: `server.setSerializerCompiler(serializerCompiler)` is
+not supported any more and throws the `FST_ERR_SERIALIZER_COMPILER_REMOVED`
+error.
+
+A type provider still describes the response schema of a route: the schema
+validates and shapes the payload, and the payload is then serialized with the
+native `JSON.stringify()`. Only the serializer compiler of the providers is
+gone.
+
+See the V5 to V6 migration guide for the details.

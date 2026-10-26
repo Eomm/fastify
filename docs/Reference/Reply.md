@@ -21,9 +21,7 @@
   - [.redirect(dest, [code ,])](#redirectdest--code)
   - [.callNotFound()](#callnotfound)
   - [.type(contentType)](#typecontenttype)
-  - [.getSerializationFunction(schema | httpStatus, [contentType])](#getserializationfunctionschema--httpstatus)
-  - [.compileSerializationSchema(schema, [httpStatus], [contentType])](#compileserializationschemaschema-httpstatus)
-  - [.serializeInput(data, [schema | httpStatus], [httpStatus], [contentType])](#serializeinputdata-schema--httpstatus-httpstatus)
+  - [Removed in v6](#removed-in-v6)
   - [.serializer(func)](#serializerfunc)
   - [.raw](#raw)
   - [.sent](#sent)
@@ -69,21 +67,10 @@ since the request was received by Fastify.
 - `.redirect(dest, [code,])` - Redirect to the specified URL, the status code is
   optional (defaults to `302`).
 - `.callNotFound()` - Invokes the custom not found handler.
-- `.serialize(payload)` - Serializes the specified payload using the default
-  JSON serializer or using the custom serializer (if one is set) and returns the
-  serialized payload.
-- `.getSerializationFunction(schema | httpStatus, [contentType])` - Returns the
-  serialization function for the specified schema or http status, if any of
-  either are set.
-- `.compileSerializationSchema(schema, [httpStatus], [contentType])` - Compiles
-  the specified schema and returns a serialization function using the default
-  (or customized) `SerializerCompiler`. The optional `httpStatus` is forwarded
-  to the `SerializerCompiler` if provided, default to `undefined`.
-- `.serializeInput(data, schema, [,httpStatus], [contentType])` - Serializes
-  the specified data using the specified schema and returns the serialized payload.
-  If the optional `httpStatus`, and `contentType` are provided, the function
-  will use the serializer function given for that specific content type and
-  HTTP Status Code. Default to `undefined`.
+- `.serialize(payload)` - Serializes the specified payload with the native
+  `JSON.stringify()` and returns the serialized payload. It does not consult
+  the response schema of the route, the output validator, the custom
+  `.serializer(function)` nor the route level reply serializer.
 - `.serializer(function)` - Sets a custom serializer for the payload.
 - `.send(payload)` - Sends the payload to the user, could be a plain text, a
   buffer, JSON, stream, or an Error object.
@@ -402,196 +389,29 @@ If the `Content-Type` has a JSON subtype, and the charset parameter is not set,
 `utf-8` will be used as the charset by default. For other content types, the
 charset must be set explicitly.
 
-### .getSerializationFunction(schema | httpStatus, [contentType])
-<a id="getserializationfunction"></a>
+### Removed in v6
+<a id="removed-in-v6"></a>
 
-By calling this function using a provided `schema` or `httpStatus`,
-and the optional `contentType`, it will return a `serialization` function
-that can be used to serialize diverse inputs. It returns `undefined` if no
-serialization function was found using either of the provided inputs.
+The reply serialization helpers of Fastify v5 are gone with
+`fast-json-stringify`. They are not deprecated aliases: they do not exist any
+more, so calling them is a `TypeError`.
 
-This heavily depends of the `schema#responses` attached to the route, or
-the serialization functions compiled by using `compileSerializationSchema`.
+- `reply.getSerializationFunction(schema | httpStatus, [contentType])` returned
+  the serialization function of a schema or of an HTTP status code.
+- `reply.compileSerializationSchema(schema, [httpStatus], [contentType])`
+  compiled a serialization schema into a serialization function.
+- `reply.serializeInput(data, [schema | httpStatus], [httpStatus],
+  [contentType])` serialized a payload against a schema or an HTTP status
+  code.
 
-```js
-const serialize = reply
-                  .getSerializationFunction({
-                    type: 'object',
-                    properties: {
-                      foo: {
-                        type: 'string'
-                      }
-                    }
-                  })
-serialize({ foo: 'bar' }) // '{"foo":"bar"}'
+`reply.serialize(payload)` survives: it is the alias of
+`JSON.stringify(payload)` and it does not consult the response schema of the
+route, the output validator, the custom `reply.serializer(fn)` nor the route
+level reply serializer. In Fastify v5 it followed those serializers, so the
+migration of a custom serializer is `reply.serialize(payload)` →
+`JSON.stringify(payload)`.
 
-// or
-
-const serialize = reply
-                  .getSerializationFunction(200)
-serialize({ foo: 'bar' }) // '{"foo":"bar"}'
-
-// or
-
-const serialize = reply
-                  .getSerializationFunction(200, 'application/json')
-serialize({ foo: 'bar' }) // '{"foo":"bar"}'
-```
-
-See [.compileSerializationSchema(schema, [httpStatus], [contentType])](#compileserializationschema)
-for more information on how to compile serialization schemas.
-
-### .compileSerializationSchema(schema, [httpStatus], [contentType])
-<a id="compileserializationschema"></a>
-
-This function will compile a serialization schema and
-return a function that can be used to serialize data.
-The function returned (a.k.a. _serialization function_) returned is compiled
-by using the provided `SerializerCompiler`. Also this is cached by using
-a `WeakMap` for reducing compilation calls.
-
-The optional parameters `httpStatus` and `contentType`, if provided,
-are forwarded directly to the `SerializerCompiler`, so it can be used
-to compile the serialization function if a custom `SerializerCompiler` is used.
-
-This heavily depends of the `schema#responses` attached to the route, or
-the serialization functions compiled by using `compileSerializationSchema`.
-
-```js
-const serialize = reply
-                  .compileSerializationSchema({
-                    type: 'object',
-                    properties: {
-                      foo: {
-                        type: 'string'
-                      }
-                    }
-                  })
-serialize({ foo: 'bar' }) // '{"foo":"bar"}'
-
-// or
-
-const serialize = reply
-                  .compileSerializationSchema({
-                    type: 'object',
-                    properties: {
-                      foo: {
-                        type: 'string'
-                      }
-                    }
-                  }, 200)
-serialize({ foo: 'bar' }) // '{"foo":"bar"}'
-
-// or
-
-const serialize = reply
-                  .compileSerializationSchema({
-                        '3xx': {
-                          content: {
-                            'application/json': {
-                              schema: {
-                                name: { type: 'string' },
-                                phone: { type: 'number' }
-                              }
-                            }
-                          }
-                        }
-                  }, '3xx', 'application/json')
-serialize({ name: 'Jone', phone: 201090909090 }) // '{"name":"Jone", "phone":201090909090}'
-```
-
-Note that you should be careful when using this function, as it will cache
-the compiled serialization functions based on the schema provided. If the
-schemas provided is mutated or changed, the serialization functions will not
-detect that the schema has been altered and for instance it will reuse the
-previously compiled serialization function based on the reference of the schema
-previously provided.
-
-If there's a need to change the properties of a schema, always opt to create
-a totally new object, otherwise the implementation won't benefit from the cache
-mechanism.
-
-:Using the following schema as example:
-```js
-const schema1 = {
-  type: 'object',
-  properties: {
-    foo: {
-      type: 'string'
-    }
-  }
-}
-```
-
-*Not*
-```js
-const serialize = reply.compileSerializationSchema(schema1)
-
-// Later on...
-schema1.properties.foo.type = 'integer'
-const newSerialize = reply.compileSerializationSchema(schema1)
-
-console.log(newSerialize === serialize) // true
-```
-
-*Instead*
-```js
-const serialize = reply.compileSerializationSchema(schema1)
-
-// Later on...
-const newSchema = Object.assign({}, schema1)
-newSchema.properties.foo.type = 'integer'
-
-const newSerialize = reply.compileSerializationSchema(newSchema)
-
-console.log(newSerialize === serialize) // false
-```
-
-### .serializeInput(data, [schema | httpStatus], [httpStatus], [contentType])
-<a id="serializeinput"></a>
-
-This function will serialize the input data based on the provided schema
-or HTTP status code. If both are provided the `httpStatus` will take precedence.
-
-If there is not a serialization function for a given `schema` a new serialization
-function will be compiled, forwarding the `httpStatus` and `contentType` if provided.
-
-```js
-reply
-  .serializeInput({ foo: 'bar'}, {
-    type: 'object',
-    properties: {
-      foo: {
-        type: 'string'
-      }
-    }
-  }) // '{"foo":"bar"}'
-
-// or
-
-reply
-  .serializeInput({ foo: 'bar'}, {
-    type: 'object',
-    properties: {
-      foo: {
-        type: 'string'
-      }
-    }
-  }, 200) // '{"foo":"bar"}'
-
-// or
-
-reply
-  .serializeInput({ foo: 'bar'}, 200) // '{"foo":"bar"}'
-
-// or
-
-reply
-  .serializeInput({ name: 'Jone', age: 18 }, '200', 'application/vnd.v1+json') // '{"name": "Jone", "age": 18}'
-```
-
-See [.compileSerializationSchema(schema, [httpStatus], [contentType])](#compileserializationschema)
-for more information on how to compile serialization schemas.
+See the V5 to V6 migration guide for the details.
 
 ### .serializer(func)
 <a id="serializer"></a>

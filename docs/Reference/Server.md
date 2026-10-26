@@ -79,9 +79,7 @@ describes the properties available in that options object.
     - [setReplySerializer](#setreplyserializer)
     - [setValidatorCompiler](#setvalidatorcompiler)
     - [setSchemaErrorFormatter](#setschemaerrorformatter)
-    - [setSerializerCompiler](#setserializercompiler)
     - [validatorCompiler](#validatorcompiler)
-    - [serializerCompiler](#serializercompiler)
     - [schemaErrorFormatter](#schemaerrorformatter)
     - [schemaController](#schemacontroller)
     - [setNotFoundHandler](#setnotfoundhandler)
@@ -707,6 +705,14 @@ const fastify = require('fastify')({
 The `serializerOpts` server option has been removed: `Fastify({ serializerOpts })`
 throws the `FST_ERR_SERIALIZER_OPTS_REMOVED` error. The response payload is
 serialized with the native `JSON.stringify()`.
+
+The `fastify.setSerializerCompiler()` method and the `fastify.serializerCompiler`
+property are gone as well: they throw the `FST_ERR_SERIALIZER_COMPILER_REMOVED`
+error. The `compilersFactory.buildSerializer` key of the `schemaController`
+option is rejected too. The response schema still validates and shapes the
+payload, but it does not compile a serializer any more.
+
+See the V5 to V6 migration guide for the details.
 
 ### `http2SessionTimeout`
 <a id="http2-session-timeout"></a>
@@ -1743,28 +1749,10 @@ Set the schema validator compiler for all routes. See
 Set the schema error formatter for all routes. See
 [#error-handling](./Validation-and-Serialization.md#schemaerrorformatter).
 
-#### setSerializerCompiler
-<a id="set-serializer-resolver"></a>
-
-Set the schema serializer compiler for all routes. See
-[#schema-serializer](./Validation-and-Serialization.md#schema-serializer).
-
-> ℹ️ Note:
-> [`setReplySerializer`](#set-reply-serializer) has priority if set!
-
 #### validatorCompiler
 <a id="validator-compiler"></a>
 
 This property can be used to get the schema validator. If not set, it will be
-`null` until the server starts, then it will be a function with the signature
-`function ({ schema, method, url, httpPart })` that returns the input `schema`
-compiled to a function for validating data. The input `schema` can access all
-the shared schemas added with [`.addSchema`](#add-schema) function.
-
-#### serializerCompiler
-<a id="serializer-compiler"></a>
-
-This property can be used to get the schema serializer. If not set, it will be
 `null` until the server starts, then it will be a function with the signature
 `function ({ schema, method, url, httpPart })` that returns the input `schema`
 compiled to a function for validating data. The input `schema` can access all

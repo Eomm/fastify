@@ -303,7 +303,15 @@ test('a rejected asynchronous error schema leaves no unhandled rejection', async
     process.removeListener('unhandledRejection', onUnhandledRejection)
   })
 
+  const logLines = []
+  const stream = {
+    write (chunk) {
+      logLines.push(chunk.toString())
+    }
+  }
+
   const fastify = Fastify({
+    logger: { level: 'debug', stream },
     schemaController: {
       outputValidatorOptions: {
         plugins: [
@@ -353,6 +361,13 @@ test('a rejected asynchronous error schema leaves no unhandled rejection', async
   await new Promise(resolve => setImmediate(resolve))
   await new Promise(resolve => setImmediate(resolve))
   t.assert.deepStrictEqual(unhandledRejections, [], 'the process has seen no unhandled rejection')
+
+  // The swallowed rejection is logged at the debug level: the failure of an
+  // asynchronous error schema is observable.
+  t.assert.ok(
+    logLines.some(line => line.includes('the asynchronous error validator failed')),
+    'the swallowed rejection has been logged'
+  )
 })
 
 test('an error body shaped by a composed error schema keeps the status code and the message', async (t) => {

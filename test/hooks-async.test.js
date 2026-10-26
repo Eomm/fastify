@@ -866,8 +866,12 @@ describe('preSerializationEnd should handle errors if the serialize method throw
     })
 
     fastify.post('/', {
-      handler (req, reply) { reply.send({ notOk: true }) },
-      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
+      handler (req, reply) { reply.send({ ok: true }) },
+      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
+      // The serializer throws: the output validation passes, so the
+      // `preSerialization` hook runs and the serialization error is handled
+      // by the error handler.
+      serializerCompiler: () => () => { throw new Error('serialize error') }
     })
 
     fastify.inject({
@@ -890,8 +894,12 @@ describe('preSerializationEnd should handle errors if the serialize method throw
     })
 
     fastify.post('/', {
-      handler (req, reply) { reply.send({ notOk: true }) },
-      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
+      handler (req, reply) { reply.send({ ok: true }) },
+      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
+      // The serializer throws: the output validation passes, so the
+      // `preSerialization` hook runs and the serialization error is handled
+      // by the error handler.
+      serializerCompiler: () => () => { throw new Error('serialize error') }
     })
 
     fastify.inject({
@@ -1095,4 +1103,57 @@ test('Register an hook (onRequestAbort) as route option should fail if mixing as
     t.assert.strictEqual(e.code, 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER')
     t.assert.strictEqual(e.message, 'Async function has too many arguments. Async hooks should not use the \'done\' argument.')
   }
+})
+
+test('Register an hook (preResponseValidation) as instance option should fail if mixing async and callback style', t => {
+  const fastify = Fastify()
+
+  try {
+    fastify.addHook('preResponseValidation', async (request, reply, payload, done) => {
+      done()
+    })
+    t.assert.fail('preResponseValidation mixing async and callback style')
+  } catch (e) {
+    t.assert.strictEqual(e.code, 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER')
+    t.assert.strictEqual(e.message, 'Async function has too many arguments. Async hooks should not use the \'done\' argument.')
+  }
+})
+
+test('Register an hook (preResponseValidation) as route option should fail if mixing async and callback style', t => {
+  const fastify = Fastify()
+
+  try {
+    fastify.get(
+      '/',
+      {
+        preResponseValidation: [
+          async (request, reply, payload, done) => {
+            done()
+          }
+        ]
+      },
+      async (request, reply) => {
+        return { hello: 'world' }
+      }
+    )
+    t.assert.fail('preResponseValidation mixing async and callback style')
+  } catch (e) {
+    t.assert.strictEqual(e.code, 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER')
+    t.assert.strictEqual(e.message, 'Async function has too many arguments. Async hooks should not use the \'done\' argument.')
+  }
+})
+
+test('an async preResponseValidation hook receives the payload and replaces it', async t => {
+  const fastify = Fastify()
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', async (request, reply, payload) => {
+    return { ...payload, hello: 'world' }
+  })
+
+  fastify.get('/', async () => ({ hello: 'fastify' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(result.payload), { hello: 'world' })
 })

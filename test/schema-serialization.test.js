@@ -57,8 +57,8 @@ test('custom serializer options', (t, testDone) => {
 
   fastify.inject('/', (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, '5', 'it must use the ceil rounding')
-    t.assert.strictEqual(res.statusCode, 200)
+    t.assert.strictEqual(res.statusCode, 500)
+    t.assert.strictEqual(JSON.parse(res.payload).code, 'FST_ERR_OUTPUT_VALIDATION')
     testDone()
   })
 })
@@ -289,7 +289,7 @@ test('Different content types', (t, testDone) => {
     switch (req.headers['code']) {
       case '200': {
         reply.header('Content-Type', 'application/json')
-        reply.code(200).send({ age: 18, city: 'AU' })
+        reply.code(200).send({ name: 'Foo' })
         break
       }
       case '201': {
@@ -318,10 +318,14 @@ test('Different content types', (t, testDone) => {
     t.assert.strictEqual(res.statusCode, 200)
     completion.stepIn()
   })
-  fastify.inject({ method: 'GET', url: '/' }, (err, res) => {
+  fastify.inject('/', (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, JSON.stringify([{ type: 'student', grade: 6 }, { type: 'student', grade: 9 }]))
-    t.assert.strictEqual(res.statusCode, 200)
+    // The content type of the answer is not declared in the `content` map of
+    // the `200` entry and it is not covered by `*/*`: the lookup fails closed
+    // and the request fails with a 500. The body is shaped by the `default`
+    // entry of the response schema, which declares no property of the error.
+    t.assert.strictEqual(res.payload, '{}')
+    t.assert.strictEqual(res.statusCode, 500)
     completion.stepIn()
   })
   fastify.inject({ method: 'GET', url: '/', headers: { Accept: 'application/vnd.v2+json' } }, (err, res) => {
@@ -332,20 +336,29 @@ test('Different content types', (t, testDone) => {
   })
   fastify.inject({ method: 'GET', url: '/', headers: { Accept: 'application/vnd.v3+json' } }, (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, JSON.stringify({ firstName: 'New', lastName: 'Hoo', country: 'eg', city: 'node' }))
-    t.assert.strictEqual(res.statusCode, 300)
+    // The content type of the answer is not declared in the `content` map of
+    // the `3xx` entry: the lookup fails closed and the request fails with a
+    // 500.
+    t.assert.strictEqual(res.payload, '{}')
+    t.assert.strictEqual(res.statusCode, 500)
     completion.stepIn()
   })
   fastify.inject({ method: 'GET', url: '/', headers: { Accept: 'application/vnd.v4+json' } }, (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, '"[object Object]"')
-    t.assert.strictEqual(res.statusCode, 201)
+    // The payload does not satisfy the response schema of the `201` entry
+    // (a string): the output validation fails and the request fails with a
+    // 500.
+    t.assert.strictEqual(res.payload, '{}')
+    t.assert.strictEqual(res.statusCode, 500)
     completion.stepIn()
   })
   fastify.inject({ method: 'GET', url: '/', headers: { Accept: 'application/vnd.v5+json' } }, (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, '"Processing exclusive content"')
-    t.assert.strictEqual(res.statusCode, 202)
+    // The payload does not satisfy the response schema of the `202` entry
+    // (a constant): the output validation fails and the request fails with a
+    // 500.
+    t.assert.strictEqual(res.payload, '{}')
+    t.assert.strictEqual(res.statusCode, 500)
     completion.stepIn()
   })
   fastify.inject({ method: 'GET', url: '/', headers: { Accept: 'application/vnd.v6+json' } }, (err, res) => {
@@ -374,7 +387,7 @@ test('Different content types', (t, testDone) => {
   })
   fastify.inject({ method: 'GET', url: '/test', headers: { Code: '200' } }, (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, JSON.stringify({ age: 18, city: 'AU' }))
+    t.assert.strictEqual(res.payload, JSON.stringify({ name: 'Foo' }))
     t.assert.strictEqual(res.statusCode, 200)
     completion.stepIn()
   })
@@ -386,8 +399,12 @@ test('Different content types', (t, testDone) => {
   })
   fastify.inject({ method: 'GET', url: '/test', headers: { Accept: 'application/vnd.v1+json' } }, (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, JSON.stringify({ created: true }))
-    t.assert.strictEqual(res.statusCode, 201)
+    // The content type of the answer is not declared in the `content` map of
+    // the `default` entry: the lookup fails closed and the request fails with
+    // a 500. The body is shaped by the response schema of the error, which
+    // declares no property of the error.
+    t.assert.strictEqual(res.payload, '{}')
+    t.assert.strictEqual(res.statusCode, 500)
     completion.stepIn()
   })
 
@@ -917,6 +934,204 @@ test('Reply serializer win over serializer ', (t, testDone) => {
   })
 })
 
+// The output validation is skipped when a custom serializer owns the wire
+// format: the payload is handed over to the serializer untouched and the
+// response keeps the status code the handler chose.
+const outputValidationSchema = {
+  response: {
+    200: {
+      content: {
+        'application/json': {
+          schema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+const invalidPayload = { name: 42, nick: 'Boo' }
+
+test('The reply serializer wins over the output validator', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.serializer(function (payload) {
+      t.assert.deepStrictEqual(payload, invalidPayload)
+      return 'reply serializator'
+    })
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'reply serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('The instance reply serializer wins over the output validator', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+  fastify.setReplySerializer(function (payload) {
+    t.assert.deepStrictEqual(payload, invalidPayload)
+    return 'instance serializator'
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'instance serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('The output validation fails closed when no custom serializer is installed', (t, testDone) => {
+  t.plan(3)
+
+  const fastify = Fastify()
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.statusCode, 500)
+    t.assert.strictEqual(JSON.parse(res.payload).code, 'FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN')
+    testDone()
+  })
+})
+
+test('A serializer installed by a preHandler hook skips the output validation', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+
+  fastify.addHook('preHandler', function (request, reply, done) {
+    reply.serializer(function (payload) {
+      t.assert.deepStrictEqual(payload, invalidPayload)
+      return 'preHandler serializator'
+    })
+    done()
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'preHandler serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('A serializer installed by a preValidation hook skips the output validation', (t, testDone) => {
+  t.plan(4)
+
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator must not be called when there is a reply serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+
+  fastify.addHook('preValidation', function (request, reply, done) {
+    reply.serializer(function (payload) {
+      t.assert.deepStrictEqual(payload, invalidPayload)
+      return 'preValidation serializator'
+    })
+    done()
+  })
+
+  fastify.get('/', { schema: outputValidationSchema }, function (req, reply) {
+    reply.type('application/vnd.api+json').code(200).send(invalidPayload)
+  })
+
+  fastify.inject('/', (err, res) => {
+    t.assert.ifError(err)
+    t.assert.strictEqual(res.payload, 'preValidation serializator')
+    t.assert.strictEqual(res.statusCode, 200)
+    testDone()
+  })
+})
+
+test('the error serializer falls back to the default one when the content type does not match', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const contentSchema = {
+    content: {
+      'text/plain': {
+        schema: { type: 'object' }
+      }
+    }
+  }
+
+  fastify.get('/exact', { schema: { response: { 500: contentSchema } } }, async () => { throw new Error('boom') })
+  fastify.get('/wildcard', { schema: { response: { '5xx': contentSchema } } }, async () => { throw new Error('boom') })
+  fastify.get('/default', { schema: { response: { default: contentSchema } } }, async () => { throw new Error('boom') })
+
+  for (const url of ['/exact', '/wildcard', '/default']) {
+    const res = await fastify.inject(url)
+    t.assert.strictEqual(res.statusCode, 500)
+    t.assert.strictEqual(JSON.parse(res.payload).message, 'boom')
+  }
+})
+
 test('The schema compiler recreate itself if needed', (t, testDone) => {
   t.plan(1)
   const fastify = Fastify()
@@ -1120,10 +1335,12 @@ test('Errors in serializer send to errorHandler', async t => {
           required: ['name']
         }
       }
-    }
-
+    },
+    // The serializer throws: the output validation passes, so the error of
+    // the serialization reaches the error handler.
+    serializerCompiler: () => () => { throw new Error('serialize error') }
   }, function (req, reply) {
-    reply.code(200).send({ no: 'thing' })
+    reply.code(200).send({ name: 'thing' })
   })
   fastify.setErrorHandler((error, request, reply) => {
     savedError = error
@@ -1138,7 +1355,7 @@ test('Errors in serializer send to errorHandler', async t => {
   t.assert.deepStrictEqual(res.json(), {
     statusCode: 500,
     error: 'Internal Server Error',
-    message: '"name" is required!'
+    message: 'serialize error'
   })
   t.assert.ok(savedError, 'error presents')
   t.assert.ok(savedError.serialization, 'Serialization sign presents')

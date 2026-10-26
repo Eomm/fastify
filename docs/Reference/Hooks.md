@@ -14,6 +14,7 @@ are Request/Reply hooks and application hooks:
   - [preParsing](#preparsing)
   - [preValidation](#prevalidation)
   - [preHandler](#prehandler)
+  - [preResponseValidation](#preresponsevalidation)
   - [preSerialization](#preserialization)
   - [onError](#onerror)
   - [onSend](#onsend)
@@ -51,7 +52,7 @@ It is easy to understand where each hook is executed by looking at the
 Hooks are affected by Fastify's encapsulation, and can thus be applied to
 selected routes. See the [Scopes](#scope) section for more information.
 
-There are ten different hooks that you can use in Request/Reply *(in order of
+There are eleven different hooks that you can use in Request/Reply *(in order of
 execution)*:
 
 ### onRequest
@@ -152,6 +153,50 @@ fastify.addHook('preHandler', async (request, reply) => {
   await asyncMethod()
 })
 ```
+
+### preResponseValidation
+
+The `preResponseValidation` hook runs after the handler has returned the
+payload and **before** the payload is validated against the route's
+`schema.response`. It lets you observe the payload the handler produced and
+shape the payload that is going to be validated.
+
+```js
+fastify.addHook('preResponseValidation', (request, reply, payload, done) => {
+  payload.hello = 'world'
+  done(null, payload)
+})
+```
+Or `async/await`:
+```js
+fastify.addHook('preResponseValidation', async (request, reply, payload) => {
+  return { ...payload, hello: 'world' }
+})
+```
+
+The payload the hook produces is validated as well: the hook cannot smuggle an
+invalid field past the validation.
+
+> ℹ️ Note:
+> The [`preSerialization`](#preserialization) hook runs *after* the validation:
+> a payload that a `preSerialization` hook adds or changes is **not** validated.
+
+> ⚠️ Warning:
+> A custom `reply.serializer(fn)` **disables the response validation** for
+> that reply. The `preResponseValidation` hook still runs, but the payload it
+> produces is never checked against `schema.response`.
+
+> ℹ️ Note:
+> If the hook throws an error, or calls `done(err)`, the error is handled by
+> the standard error handler and the payload is **not** validated for that
+> request.
+
+> ℹ️ Note:
+> The hook is NOT called if the payload is a `string`, a `Buffer`, an
+> `ArrayBuffer`, a `stream` or a `Response`: those payloads never reach the
+> response pipeline. A `null` payload does reach the hook, but it is never
+> validated.
+
 ### preSerialization
 
 If you are using the `preSerialization` hook, you can change (or replace) the

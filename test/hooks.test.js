@@ -2847,7 +2847,6 @@ test('preSerialization hook should run before serialization and be able to modif
               type: 'string'
             }
           },
-          required: ['world'],
           additionalProperties: false
         }
       }
@@ -3673,4 +3672,305 @@ test('socket._meta and timeout listener are cleared on reply.hijack() when onTim
     `socket._meta must be null or undefined after reply.hijack() — got: ${JSON.stringify(metaAfterHijack)}`
   )
   t.assert.strictEqual(hasFastifyTimeoutListenerAfterHijack, false, 'Fastify timeout listener must be removed after reply.hijack()')
+})
+
+test('the preResponseValidation hook runs between the handler and the output validation', async t => {
+  const order = []
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => (payload) => {
+            order.push('validator')
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', function (req, reply, payload, done) {
+    order.push('preResponseValidation')
+    done(null, payload)
+  })
+
+  fastify.addHook('preSerialization', function (req, reply, payload, done) {
+    order.push('preSerialization')
+    done(null, payload)
+  })
+
+  fastify.addHook('onSend', function (req, reply, payload, done) {
+    order.push('onSend')
+    done(null, payload)
+  })
+
+  fastify.get('/first', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, function (req, reply) {
+    order.push('handler')
+    reply.send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/first')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.deepStrictEqual(
+    order,
+    ['handler', 'preResponseValidation', 'validator', 'preSerialization', 'onSend'],
+    'the hook runs after the handler and before the output validation'
+  )
+})
+
+test('a preResponseValidation hook that breaks the response schema fails the response', async t => {
+  const fastify = Fastify()
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', function (req, reply, payload, done) {
+    payload.count = 'not a number'
+    done(null, payload)
+  })
+
+  fastify.get('/first', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' },
+            count: { type: 'number' }
+          },
+          required: ['hello', 'count']
+        }
+      }
+    }
+  }, function (req, reply) {
+    reply.send({ hello: 'world', count: 1 })
+  })
+
+  const result = await fastify.inject('/first')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.statusCode, 500)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+})
+
+test('a payload made invalid by a preSerialization hook is not validated again', async t => {
+  const fastify = Fastify()
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preSerialization', function (req, reply, payload, done) {
+    payload.count = '42'
+    done(null, payload)
+  })
+
+  const schema = {
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          hello: { type: 'string' },
+          count: { type: 'number' }
+        },
+        required: ['hello', 'count']
+      }
+    }
+  }
+
+  fastify.get('/invalid', { schema }, function (req, reply) {
+    reply.send({ hello: 'world', count: '42' })
+  })
+
+  fastify.get('/valid', { schema }, function (req, reply) {
+    reply.send({ hello: 'world', count: 42 })
+  })
+
+  // The same payload is rejected when it comes from the handler: the
+  // validation is strict about the types.
+  const invalid = await fastify.inject('/invalid')
+  t.assert.strictEqual(invalid.statusCode, 500)
+  t.assert.strictEqual(JSON.parse(invalid.payload).code, 'FST_ERR_OUTPUT_VALIDATION')
+
+  // The `preSerialization` hook runs after the validation, so the payload it
+  // produces is never validated again.
+  const valid = await fastify.inject('/valid')
+  t.assert.strictEqual(valid.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(valid.payload), { hello: 'world', count: 42 })
+})
+
+test('a preResponseValidation hook that throws is handled by the error handler and skips the output validation', async t => {
+  let validated = false
+  let handledError = null
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => (payload) => {
+            validated = true
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', function (req, reply, payload, done) {
+    throw new Error('preResponseValidation aborted')
+  })
+
+  fastify.setErrorHandler(function (err, request, reply) {
+    handledError = err
+    reply.code(500).send({ message: err.message })
+  })
+
+  fastify.get('/first', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, function (req, reply) {
+    reply.send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/first')
+  t.assert.strictEqual(result.statusCode, 500)
+  t.assert.strictEqual(JSON.parse(result.payload).message, 'preResponseValidation aborted')
+  t.assert.ok(handledError, 'the error reached the error handler')
+  t.assert.strictEqual(handledError.message, 'preResponseValidation aborted')
+  t.assert.strictEqual(validated, false, 'the output validator has not been invoked')
+})
+
+test('a preResponseValidation hook that calls done with an error skips the output validation', async t => {
+  let validated = false
+  let handledError = null
+  const fastify = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => (payload) => {
+            validated = true
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', function (req, reply, payload, done) {
+    done(new Error('preResponseValidation aborted'))
+  })
+
+  fastify.setErrorHandler(function (err, request, reply) {
+    handledError = err
+    reply.code(500).send({ message: err.message })
+  })
+
+  fastify.get('/first', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, function (req, reply) {
+    reply.send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/first')
+  t.assert.strictEqual(result.statusCode, 500)
+  t.assert.strictEqual(JSON.parse(result.payload).message, 'preResponseValidation aborted')
+  t.assert.ok(handledError, 'the error reached the error handler')
+  t.assert.strictEqual(handledError.message, 'preResponseValidation aborted')
+  t.assert.strictEqual(validated, false, 'the output validator has not been invoked')
+})
+
+test('the preResponseValidation hook still runs when a custom reply serializer is in use', async t => {
+  let observed = null
+  const fastify = Fastify()
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', function (req, reply, payload, done) {
+    observed = payload
+    done(null, payload)
+  })
+
+  fastify.get('/first', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, function (req, reply) {
+    reply.serializer(function (payload) {
+      return JSON.stringify({ custom: payload.hello })
+    })
+    reply.send({ hello: 'world' })
+  })
+
+  const result = await fastify.inject('/first')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(result.payload), { custom: 'world' })
+  t.assert.deepStrictEqual(observed, { hello: 'world' }, 'the hook has observed the payload')
+})
+
+test('a failing preResponseValidation hook does not affect the other requests', async t => {
+  const fastify = Fastify()
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', function (req, reply, payload, done) {
+    if (req.query.fail === 'true') {
+      done(new Error('preResponseValidation aborted'))
+      return
+    }
+    done(null, payload)
+  })
+
+  fastify.get('/first', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, function (req, reply) {
+    reply.send({ hello: 'world' })
+  })
+
+  const [failed, succeeded] = await Promise.all([
+    fastify.inject('/first?fail=true'),
+    fastify.inject('/first')
+  ])
+
+  t.assert.strictEqual(failed.statusCode, 500)
+  t.assert.strictEqual(succeeded.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(succeeded.payload), { hello: 'world' })
 })

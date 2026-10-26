@@ -1,8 +1,9 @@
-import { StandaloneValidator } from '@fastify/ajv-compiler'
+import { BuildCompilerFromPool, StandaloneValidator } from '@fastify/ajv-compiler'
 import { StandaloneSerializer } from '@fastify/fast-json-stringify-compiler'
 import Ajv from 'ajv'
 import { expect } from 'tstyche'
 import fastify, { FastifyInstance, FastifySchema } from '../../fastify.js'
+import { SchemaErrorDataVar } from '../../types/schema.js'
 
 const server = fastify()
 
@@ -133,3 +134,39 @@ expect(server.setSerializerCompiler<FastifySchema & { validate: string }>(
     }
   })
 }
+
+// The output side of the schema controller: the options of the output pool
+// and the factory that builds it.
+{
+  const outputOptionsServer = fastify({
+    schemaController: {
+      outputValidatorOptions: {
+        customOptions: { allErrors: true },
+        plugins: []
+      }
+    }
+  })
+  expect(outputOptionsServer).type.toBeAssignableTo<FastifyInstance>()
+}
+
+{
+  const buildOutputValidator: BuildCompilerFromPool = (externalSchemas, outputValidatorOptions) => {
+    expect(externalSchemas).type.toBeAssignableTo<Record<string, unknown>>()
+    expect(outputValidatorOptions).type.toBeAssignableTo<{ customOptions?: { allErrors?: boolean } } | undefined>()
+
+    return (schema) => new Ajv().compile(schema)
+  }
+
+  const outputFactoryServer = fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator
+      }
+    }
+  })
+  expect(outputFactoryServer).type.toBeAssignableTo<FastifyInstance>()
+}
+
+// The output validation context is part of the validation context union
+expect<'response'>().type.toBeAssignableTo<SchemaErrorDataVar>()
+expect<SchemaErrorDataVar>().type.toBeAssignableTo<'body' | 'headers' | 'params' | 'querystring' | 'response'>()

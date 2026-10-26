@@ -1,4 +1,4 @@
-import { ValidatorFactory } from '@fastify/ajv-compiler'
+import { BuildCompilerFromPool, ValidatorFactory } from '@fastify/ajv-compiler'
 import { SerializerFactory } from '@fastify/fast-json-stringify-compiler'
 import { FastifyInstance, SafePromiseLike } from '../fastify'
 /**
@@ -53,9 +53,11 @@ export interface FastifySchemaControllerOptions {
   compilersFactory?: {
     buildValidator?: ValidatorFactory;
     buildSerializer?: SerializerFactory;
+    buildOutputValidator?: ValidatorFactory;
   };
+  outputValidatorOptions?: Parameters<BuildCompilerFromPool>[1];
 }
 
-export type SchemaErrorDataVar = 'body' | 'headers' | 'params' | 'querystring'
+export type SchemaErrorDataVar = 'body' | 'headers' | 'params' | 'querystring' | 'response'
 
 export type SchemaErrorFormatter = (errors: FastifySchemaValidationError[], dataVar: SchemaErrorDataVar) => Error

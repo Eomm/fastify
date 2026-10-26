@@ -13,7 +13,7 @@ const { waitForCb } = require('./helper')
 const echoParams = (req, reply) => { reply.send(req.params) }
 const echoBody = (req, reply) => { reply.send(req.body) }
 
-  ;['addSchema', 'getSchema', 'getSchemas', 'setValidatorCompiler', 'setSerializerCompiler'].forEach(f => {
+  ;['addSchema', 'getSchema', 'getSchemas', 'setValidatorCompiler'].forEach(f => {
   test(`Should expose ${f} function`, t => {
     t.plan(1)
     const fastify = Fastify()
@@ -21,7 +21,23 @@ const echoBody = (req, reply) => { reply.send(req.body) }
   })
 })
 
-;['setValidatorCompiler', 'setSerializerCompiler'].forEach(f => {
+test('setSerializerCompiler is not available any more', (t) => {
+  t.plan(2)
+  const fastify = Fastify()
+  // The serializer compiler is gone with `fast-json-stringify`: the method
+  // fails explicitly, it is never a silent no-op and never a loose
+  // `TypeError`.
+  t.assert.throws(
+    () => fastify.setSerializerCompiler(() => { }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
+  t.assert.throws(
+    () => fastify.setSerializerCompiler(() => { }),
+    { name: 'FastifyError' }
+  )
+})
+
+;['setValidatorCompiler'].forEach(f => {
   test(`cannot call ${f} after binding`, (t, testDone) => {
     t.plan(2)
     const fastify = Fastify()
@@ -101,13 +117,15 @@ test('Get validatorCompiler after setValidatorCompiler', (t, testDone) => {
   })
 })
 
-test('Get serializerCompiler after setSerializerCompiler', (t, testDone) => {
+test('The serializerCompiler accessor is not available any more', (t, testDone) => {
   t.plan(2)
-  const myCompiler = () => { }
   const fastify = Fastify()
-  fastify.setSerializerCompiler(myCompiler)
-  const sc = fastify.serializerCompiler
-  t.assert.ok(Object.is(myCompiler, sc))
+  // The accessor must not expose a serializer compiler that does not exist:
+  // it fails explicitly instead of answering `undefined` silently.
+  t.assert.throws(
+    () => fastify.serializerCompiler,
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
   fastify.ready(err => {
     t.assert.ifError(err)
     testDone()
@@ -131,8 +149,7 @@ test('Get compilers is empty when settle on routes', (t, testDone) => {
         }
       }
     },
-    validatorCompiler: ({ schema, method, url, httpPart }) => { },
-    serializerCompiler: ({ schema, method, url, httpPart }) => { }
+    validatorCompiler: ({ schema, method, url, httpPart }) => { }
   }, function (req, reply) {
     reply.send('ok')
   })
@@ -144,7 +161,12 @@ test('Get compilers is empty when settle on routes', (t, testDone) => {
   }, (err, res) => {
     t.assert.ifError(err)
     t.assert.strictEqual(fastify.validatorCompiler, undefined)
-    t.assert.strictEqual(fastify.serializerCompiler, undefined)
+    // The serializer compiler does not exist any more: the accessor fails
+    // instead of exposing a compiler that is not there.
+    t.assert.throws(
+      () => fastify.serializerCompiler,
+      { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+    )
     testDone()
   })
 })
@@ -267,7 +289,7 @@ test('Should throw of the schema does not exists in output', (t, testDone) => {
 
   fastify.ready(err => {
     t.assert.strictEqual(err.code, 'FST_ERR_SCH_SERIALIZATION_BUILD')
-    t.assert.match(err.message, /^Failed building the serialization schema for GET: \/:id, due to error Cannot find reference.*/) // error from fast-json-stringify
+    t.assert.match(err.message, /^Failed building the serialization schema for GET: \/:id, due to error can't resolve reference #notExist/) // error from the output validator (Ajv)
     testDone()
   })
 })
@@ -1503,7 +1525,9 @@ test('onReady hook has the compilers ready', (t, testDone) => {
 
   fastify.addHook('onReady', function (done) {
     t.assert.ok(this.validatorCompiler)
-    t.assert.ok(this.serializerCompiler)
+    // The schema controller has no serializer compiler state any more: the
+    // field simply does not exist.
+    t.assert.strictEqual(this[kSchemaController].serializerCompiler, undefined)
     done()
   })
 
@@ -1511,7 +1535,7 @@ test('onReady hook has the compilers ready', (t, testDone) => {
   fastify.register(async (i, o) => {
     i.addHook('onReady', function (done) {
       t.assert.ok(this.validatorCompiler)
-      t.assert.ok(this.serializerCompiler)
+      t.assert.strictEqual(this[kSchemaController].serializerCompiler, undefined)
       done()
     })
 
@@ -1882,124 +1906,8 @@ test('setSchemaController: Inherits correctly parent schemas with a customized v
   t.assert.strictEqual(res.statusCode, 400, 'Should not coerce the string into array')
 })
 
-test('setSchemaController: Inherits buildSerializer from parent if not present within the instance', async t => {
-  t.plan(6)
-  const customAjv = new Ajv({ coerceTypes: false })
-  const someSchema = {
-    $id: 'some',
-    type: 'array',
-    items: {
-      type: 'string'
-    }
-  }
-  const errorResponseSchema = {
-    $id: 'error_response',
-    type: 'object',
-    properties: {
-      statusCode: {
-        type: 'integer'
-      },
-      message: {
-        type: 'string'
-      }
-    }
-  }
-  let rootSerializerCalled = 0
-  let rootValidatorCalled = 0
-  let childValidatorCalled = 0
-  const rootBuildSerializer = function (externalSchemas) {
-    rootSerializerCalled++
-    return function serializer () {
-      return data => {
-        return JSON.stringify({
-          statusCode: data.statusCode,
-          message: data.message
-        })
-      }
-    }
-  }
-  const rootBuildValidator = function (externalSchemas) {
-    rootValidatorCalled++
-    return function validatorCompiler ({ schema }) {
-      return customAjv.compile(schema)
-    }
-  }
-  const server = Fastify({
-    schemaController: {
-      compilersFactory: {
-        buildValidator: rootBuildValidator,
-        buildSerializer: rootBuildSerializer
-      }
-    }
-  })
-
-  server.addSchema(someSchema)
-  server.addSchema(errorResponseSchema)
-
-  server.register((instance, _, done) => {
-    instance.setSchemaController({
-      compilersFactory: {
-        buildValidator: function (externalSchemas) {
-          childValidatorCalled++
-          const schemaKeys = Object.keys(externalSchemas)
-          for (const key of schemaKeys) {
-            if (customAjv.getSchema(key) == null) {
-              customAjv.addSchema(externalSchemas[key], key)
-            }
-          }
-          return function validatorCompiler ({ schema }) {
-            return customAjv.compile(schema)
-          }
-        }
-      }
-    })
-
-    instance.get(
-      '/',
-      {
-        schema: {
-          querystring: {
-            type: 'object',
-            properties: {
-              msg: {
-                $ref: 'some#'
-              }
-            }
-          },
-          response: {
-            '4xx': {
-              $ref: 'error_response#'
-            }
-          }
-        }
-      },
-      (req, reply) => {
-        reply.send({ noop: 'noop' })
-      }
-    )
-
-    done()
-  })
-
-  const res = await server.inject({
-    method: 'GET',
-    url: '/',
-    query: {
-      msg: ['string']
-    }
-  })
-  const json = res.json()
-
-  t.assert.strictEqual(json.statusCode, 400)
-  t.assert.strictEqual(json.message, 'querystring/msg must be array')
-  t.assert.strictEqual(rootSerializerCalled, 1, 'Should be called from the child')
-  t.assert.strictEqual(rootValidatorCalled, 0, 'Should not be called from the child')
-  t.assert.strictEqual(childValidatorCalled, 1, 'Should be called from the child')
-  t.assert.strictEqual(res.statusCode, 400, 'Should not coerce the string into array')
-})
-
 test('setSchemaController: Inherits buildValidator from parent if not present within the instance', async t => {
-  t.plan(6)
+  t.plan(4)
   const customAjv = new Ajv({ coerceTypes: false })
   const someSchema = {
     $id: 'some',
@@ -2020,15 +1928,7 @@ test('setSchemaController: Inherits buildValidator from parent if not present wi
       }
     }
   }
-  let rootSerializerCalled = 0
   let rootValidatorCalled = 0
-  let childSerializerCalled = 0
-  const rootBuildSerializer = function (externalSchemas) {
-    rootSerializerCalled++
-    return function serializer () {
-      return data => JSON.stringify(data)
-    }
-  }
   const rootBuildValidator = function (externalSchemas) {
     rootValidatorCalled++
     const schemaKeys = Object.keys(externalSchemas)
@@ -2044,28 +1944,18 @@ test('setSchemaController: Inherits buildValidator from parent if not present wi
   const server = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: rootBuildValidator,
-        buildSerializer: rootBuildSerializer
+        buildValidator: rootBuildValidator
       }
     }
   })
 
   server.register((instance, _, done) => {
     instance.register((subInstance, _, subDone) => {
+      // The child does not provide a validator factory: it inherits the one
+      // of the parent. The serializer factory is gone with
+      // `fast-json-stringify`: there is nothing to inherit any more.
       subInstance.setSchemaController({
-        compilersFactory: {
-          buildSerializer: function (externalSchemas) {
-            childSerializerCalled++
-            return function serializerCompiler () {
-              return data => {
-                return JSON.stringify({
-                  statusCode: data.statusCode,
-                  message: data.message
-                })
-              }
-            }
-          }
-        }
+        compilersFactory: {}
       })
 
       subInstance.get(
@@ -2112,9 +2002,7 @@ test('setSchemaController: Inherits buildValidator from parent if not present wi
 
   t.assert.strictEqual(json.statusCode, 400)
   t.assert.strictEqual(json.message, 'querystring/msg must be array')
-  t.assert.strictEqual(rootSerializerCalled, 0, 'Should be called from the child')
-  t.assert.strictEqual(rootValidatorCalled, 1, 'Should not be called from the child')
-  t.assert.strictEqual(childSerializerCalled, 1, 'Should be called from the child')
+  t.assert.strictEqual(rootValidatorCalled, 1, 'Should be called from the child')
   t.assert.strictEqual(res.statusCode, 400, 'Should not coerce the string into array')
 })
 

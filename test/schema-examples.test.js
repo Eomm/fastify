@@ -361,13 +361,18 @@ test('Example - serialization 2', (t, done) => {
   })
 })
 
-test('Example - serializator', (t, done) => {
-  t.plan(1)
+test('Example - serializator', async (t) => {
   const fastify = Fastify()
+  t.after(() => fastify.close())
 
-  fastify.setSerializerCompiler(({ schema, method, url, httpStatus }) => {
-    return data => JSON.stringify(data)
-  })
+  // The serializer compiler is gone with `fast-json-stringify`: the method
+  // fails explicitly, it is never a silent no-op.
+  t.assert.throws(
+    () => fastify.setSerializerCompiler(({ schema, method, url, httpStatus }) => {
+      return data => JSON.stringify(data)
+    }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
 
   fastify.get('/user', {
     handler (req, reply) {
@@ -386,10 +391,13 @@ test('Example - serializator', (t, done) => {
     }
   })
 
-  fastify.ready(err => {
-    t.assert.ifError(err)
-    done()
-  })
+  await fastify.ready()
+
+  // The output validator shapes the payload: the property that the response
+  // schema does not declare never reaches the wire.
+  const response = await fastify.inject('/user')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"id":1,"name":"Foo"}')
 })
 
 test('Example - schemas examples', (t, done) => {

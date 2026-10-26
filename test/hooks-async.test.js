@@ -855,7 +855,7 @@ test('The this should be the same of the encapsulation level', async t => {
   await fastify.inject({ method: 'GET', path: '/nested' })
 })
 
-describe('preSerializationEnd should handle errors if the serialize method throws', () => {
+describe('the preSerialization hooks of an async route', () => {
   test('works with sync preSerialization', (t, testDone) => {
     t.plan(3)
     const fastify = Fastify()
@@ -867,11 +867,7 @@ describe('preSerializationEnd should handle errors if the serialize method throw
 
     fastify.post('/', {
       handler (req, reply) { reply.send({ ok: true }) },
-      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
-      // The serializer throws: the output validation passes, so the
-      // `preSerialization` hook runs and the serialization error is handled
-      // by the error handler.
-      serializerCompiler: () => () => { throw new Error('serialize error') }
+      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
     })
 
     fastify.inject({
@@ -879,7 +875,7 @@ describe('preSerializationEnd should handle errors if the serialize method throw
       url: '/'
     }, (err, res) => {
       t.assert.ifError(err)
-      t.assert.notEqual(res.statusCode, 200)
+      t.assert.strictEqual(res.statusCode, 200)
       testDone()
     })
   })
@@ -895,11 +891,7 @@ describe('preSerializationEnd should handle errors if the serialize method throw
 
     fastify.post('/', {
       handler (req, reply) { reply.send({ ok: true }) },
-      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
-      // The serializer throws: the output validation passes, so the
-      // `preSerialization` hook runs and the serialization error is handled
-      // by the error handler.
-      serializerCompiler: () => () => { throw new Error('serialize error') }
+      schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
     })
 
     fastify.inject({
@@ -907,9 +899,30 @@ describe('preSerializationEnd should handle errors if the serialize method throw
       url: '/'
     }, (err, res) => {
       t.assert.ifError(err)
-      t.assert.notEqual(res.statusCode, 200)
+      t.assert.strictEqual(res.statusCode, 200)
       testDone()
     })
+  })
+
+  test('the route level serializerCompiler option is rejected at registration', (t, testDone) => {
+    t.plan(1)
+    const fastify = Fastify()
+
+    fastify.addHook('preSerialization', async (request, reply, payload) => {
+      t.assert.fail('the hook must not run: the route is never registered')
+      return payload
+    })
+
+    t.assert.throws(
+      () => fastify.post('/', {
+        handler (req, reply) { reply.send({ ok: true }) },
+        schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
+        serializerCompiler: () => () => { throw new Error('serialize error') }
+      }),
+      { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+    )
+
+    testDone()
   })
 })
 

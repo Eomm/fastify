@@ -721,9 +721,6 @@ test('The default schema compilers should not be called when overwritten by the 
   const Fastify = proxyquire('../', {
     '@fastify/ajv-compiler': () => {
       t.assert.fail('The default validator compiler should not be called')
-    },
-    '@fastify/fast-json-stringify-compiler': () => {
-      t.assert.fail('The default serializer compiler should not be called')
     }
   })
 
@@ -733,12 +730,6 @@ test('The default schema compilers should not be called when overwritten by the 
         buildValidator: function factory () {
           t.assert.ok('The custom validator compiler should be called')
           return function validatorCompiler () {
-            return () => { return true }
-          }
-        },
-        buildSerializer: function factory () {
-          t.assert.ok('The custom serializer compiler should be called')
-          return function serializerCompiler () {
             return () => { return true }
           }
         }
@@ -757,6 +748,26 @@ test('The default schema compilers should not be called when overwritten by the 
     }, () => { })
 
   await fastify.ready()
+})
+
+test('The serializer compiler factory is rejected: it is not supported any more', async t => {
+  const fastify = Fastify()
+
+  t.assert.throws(
+    () => Fastify({
+      schemaController: {
+        compilersFactory: {
+          buildSerializer: function factory () {
+            t.assert.fail('The removed serializer compiler factory must not be called')
+            return () => { }
+          }
+        }
+      }
+    }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
+
+  await fastify.close()
 })
 
 test('Supports async JOI validation', (t, testDone) => {

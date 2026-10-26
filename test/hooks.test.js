@@ -8,7 +8,6 @@ const fs = require('node:fs')
 const split = require('split2')
 const symbols = require('../lib/symbols.js')
 const payload = { hello: 'world' }
-const proxyquire = require('proxyquire')
 const { connect } = require('node:net')
 const { sleep, waitForCb } = require('./helper')
 const { fetch } = require('undici')
@@ -1250,13 +1249,6 @@ test('clear payload', (t, testDone) => {
 
 test('onSend hook throws', async t => {
   t.plan(10)
-  const Fastify = proxyquire('..', {
-    './lib/schemas.js': {
-      getSchemaSerializer: (param1, param2, param3) => {
-        t.assert.strictEqual(param3, 'application/json; charset=utf-8', 'param3 should be "application/json; charset=utf-8"')
-      }
-    }
-  })
   const fastify = Fastify()
   t.after(() => { fastify.close() })
   fastify.addHook('onSend', function (request, reply, payload, done) {

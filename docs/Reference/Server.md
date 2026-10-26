@@ -31,6 +31,7 @@ describes the properties available in that options object.
   - [`exposeHeadRoutes`](#exposeheadroutes)
   - [`return503OnClosing`](#return503onclosing)
   - [`ajv`](#ajv)
+  - [Removed in v6](#removed-in-v6)
   - [`http2SessionTimeout`](#http2sessiontimeout)
   - [`frameworkErrors`](#frameworkerrors)
   - [`clientErrorHandler`](#clienterrorhandler)

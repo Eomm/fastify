@@ -2,9 +2,13 @@
 
 const { test } = require('node:test')
 const Fastify = require('..')
-const { kSchemaController, kOptions, kSchemaResponse, kSchemaOutputValidator } = require('../lib/symbols')
+const { kSchemaController, kOptions, kSchemaOutputValidator } = require('../lib/symbols')
 const { getResponseSchemaEntry } = require('../lib/schemas')
 const { compileSchemasForResponseValidation } = require('../lib/validation')
+
+// The bucket of a second lookup: the helper is schema agnostic, the symbol
+// selects the bucket it looks into.
+const kOtherSchemaBucket = Symbol('other-response-schema')
 const fastify = require('..')()
 
 const opts = {
@@ -1104,22 +1108,22 @@ test('a route without a response schema does not build the output pool', async t
 
 test('the response schema lookup matches the exact status code first', t => {
   const context = {
-    [kSchemaResponse]: {
+    [kOtherSchemaBucket]: {
       200: 'exact',
       '2xx': 'wildcard',
       default: 'default'
     }
   }
 
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json'), 'exact')
-  t.assert.strictEqual(getResponseSchemaEntry(context, 201, 'application/json'), 'wildcard')
-  t.assert.strictEqual(getResponseSchemaEntry(context, 500, 'application/json'), 'default')
-  t.assert.strictEqual(getResponseSchemaEntry({ [kSchemaResponse]: { 200: 'exact' } }, 302, 'application/json'), false)
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json', { symbol: kOtherSchemaBucket }), 'exact')
+  t.assert.strictEqual(getResponseSchemaEntry(context, 201, 'application/json', { symbol: kOtherSchemaBucket }), 'wildcard')
+  t.assert.strictEqual(getResponseSchemaEntry(context, 500, 'application/json', { symbol: kOtherSchemaBucket }), 'default')
+  t.assert.strictEqual(getResponseSchemaEntry({ [kOtherSchemaBucket]: { 200: 'exact' } }, 302, 'application/json', { symbol: kOtherSchemaBucket }), false)
 })
 
 test('the response schema lookup matches the exact media type first', t => {
   const context = {
-    [kSchemaResponse]: {
+    [kOtherSchemaBucket]: {
       200: {
         'application/json': 'json',
         '*/*': 'any'
@@ -1127,42 +1131,42 @@ test('the response schema lookup matches the exact media type first', t => {
     }
   }
 
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json'), 'json')
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json; charset=utf-8'), 'json')
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'text/plain'), 'any')
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json', { symbol: kOtherSchemaBucket }), 'json')
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json; charset=utf-8', { symbol: kOtherSchemaBucket }), 'json')
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'text/plain', { symbol: kOtherSchemaBucket }), 'any')
 })
 
 test('the response schema lookup returns false when the content type does not match', t => {
   const context = {
-    [kSchemaResponse]: {
+    [kOtherSchemaBucket]: {
       200: {
         'application/json': 'json'
       }
     }
   }
 
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'text/plain', { failClosed: false }), false)
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'not a media type', { failClosed: false }), false)
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'text/plain', { failClosed: false, symbol: kOtherSchemaBucket }), false)
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'not a media type', { failClosed: false, symbol: kOtherSchemaBucket }), false)
   t.assert.throws(
-    () => getResponseSchemaEntry(context, 200, 'text/plain', { failClosed: true }),
+    () => getResponseSchemaEntry(context, 200, 'text/plain', { failClosed: true, symbol: kOtherSchemaBucket }),
     { code: 'FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN' }
   )
   t.assert.throws(
-    () => getResponseSchemaEntry(context, 200, 'not a media type', { failClosed: true }),
+    () => getResponseSchemaEntry(context, 200, 'not a media type', { failClosed: true, symbol: kOtherSchemaBucket }),
     { code: 'FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN' }
   )
 })
 
 test('the response schema lookup looks into the bucket selected by the symbol', t => {
   const context = {
-    [kSchemaResponse]: { 200: 'serializer' },
+    [kOtherSchemaBucket]: { 200: 'other' },
     [kSchemaOutputValidator]: { 200: 'validator' }
   }
 
-  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json'), 'serializer')
+  t.assert.strictEqual(getResponseSchemaEntry(context, 200, 'application/json'), 'validator')
   t.assert.strictEqual(
-    getResponseSchemaEntry(context, 200, 'application/json', { symbol: kSchemaOutputValidator }),
-    'validator'
+    getResponseSchemaEntry(context, 200, 'application/json', { symbol: kOtherSchemaBucket }),
+    'other'
   )
   t.assert.strictEqual(getResponseSchemaEntry({}, 200, 'application/json'), false)
 })

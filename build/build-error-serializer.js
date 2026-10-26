@@ -115,7 +115,8 @@ function assertPinnedVersion (version, pinned) {
   if (version !== pinned) {
     throw new Error(
       `The installed version of '${upstreamName}' is '${version}' but the devDependency is pinned to '${pinned}'. ` +
-      `Install the pinned version ('npm install') and regenerate the committed artefact with 'npm run build:error-serializer'.`
+      'Install the pinned version (npm install) and regenerate the committed artefact ' +
+      'with npm run build:error-serializer.'
     )
   }
 }

@@ -12,9 +12,12 @@ const { getResponseSchemaEntry } = require('../../lib/schemas')
 const {
   kRouteContext,
   kSchemaController,
-  kSchemaResponse,
   kSchemaOutputValidator
 } = require('../../lib/symbols')
+
+// The bucket of a second lookup: the helper is schema agnostic, the symbol
+// selects the bucket it looks into.
+const kOtherSchemaBucket = Symbol('other-response-schema')
 
 // ---------------------------------------------------------------------------
 // 01-01 / task 1 — the output Ajv pool
@@ -141,22 +144,22 @@ test('01-01/T1: the compiled output validators live on the route context and are
 })
 
 test('01-01/T1: getResponseSchemaEntry is schema agnostic - the bucket is selected by the symbol', (t) => {
-  const serializerEntry = function serializer () {}
+  const otherEntry = function other () {}
   const validatorEntry = function validator () {}
   const context = {
-    [kSchemaResponse]: { 200: serializerEntry },
+    [kOtherSchemaBucket]: { 200: otherEntry },
     [kSchemaOutputValidator]: { 200: validatorEntry }
   }
 
   t.assert.strictEqual(
     getResponseSchemaEntry(context, 200, 'application/json'),
-    serializerEntry,
-    'without the option the helper looks into the serializer bucket'
+    validatorEntry,
+    'without the option the helper looks into the output validator bucket'
   )
   t.assert.strictEqual(
-    getResponseSchemaEntry(context, 200, 'application/json', { symbol: kSchemaOutputValidator }),
-    validatorEntry,
-    'with the option the helper looks into the output validator bucket'
+    getResponseSchemaEntry(context, 200, 'application/json', { symbol: kOtherSchemaBucket }),
+    otherEntry,
+    'with the option the helper looks into the selected bucket'
   )
 })
 

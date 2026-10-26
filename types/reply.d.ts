@@ -77,7 +77,7 @@ export interface FastifyReply<
    * It does not consult the route schema, the output validator, the custom
    * `reply.serializer(fn)` nor the route level `replySerializer`.
    */
-  serialize(payload: any): string | ArrayBuffer | Buffer;
+  serialize(payload: any): string | undefined;
   then(fulfilled: () => void, rejected: (err: Error) => void): void;
   trailer: (
     key: string,

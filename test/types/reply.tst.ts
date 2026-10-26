@@ -45,7 +45,7 @@ const getHandler: RouteHandlerMethod = function (_request, reply) {
   expect(reply.callNotFound).type.toBe<() => void>()
   expect(reply.type).type.toBe<(contentType: string) => FastifyReply>()
   expect(reply.serializer).type.toBe<(fn: (payload: any) => string) => FastifyReply>()
-  expect(reply.serialize).type.toBe<(payload: any) => string | ArrayBuffer | Buffer>()
+  expect(reply.serialize).type.toBe<(payload: any) => string | undefined>()
   expect(reply.then).type.toBe<(fulfilled: () => void, rejected: (err: Error) => void) => void>()
   expect(reply.trailer).type.toBe<
     (

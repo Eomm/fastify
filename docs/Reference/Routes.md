@@ -20,6 +20,7 @@ declared using the shorthand method or the full declaration.
 - [Constraints](#constraints)
   - [Version Constraints](#version-constraints)
   - [Host Constraints](#host-constraints)
+- [Removed in v6](#removed-in-v6)
 
 ### Full declaration
 <a id="full-declaration"></a>
@@ -105,10 +106,6 @@ fastify.route(options)
 * `validatorCompiler({ schema, method, url, httpPart })`: function that builds
   schemas for request validations. See the [Validation and
   Serialization](./Validation-and-Serialization.md#schema-validator)
-  documentation.
-* `serializerCompiler({ schema, method, url, httpStatus, contentType })`:
-  function that builds schemas for response serialization. See the [Validation and
-  Serialization](./Validation-and-Serialization.md#schema-serializer)
   documentation.
 * `schemaErrorFormatter(errors, dataVar)`: function that formats the errors from
   the validation compiler. See the [Validation and
@@ -825,3 +822,17 @@ const secret = {
 >   }
 > })
 > ```
+
+### Removed in v6
+<a id="removed-in-v6"></a>
+
+The route level `serializerCompiler({ schema, method, url, httpStatus,
+contentType })` option has been removed: the response body is produced by the
+native `JSON.stringify()`, after the response schema has validated and shaped
+the payload. A route that declares the option is rejected at registration with
+the `FST_ERR_SERIALIZER_COMPILER_REMOVED` error — the option is never
+silently ignored.
+
+See the [Validation and Serialization](./Validation-and-Serialization.md#removed-in-v6)
+documentation for the whole list of the removed serialization APIs and the
+V5 to V6 migration guide.

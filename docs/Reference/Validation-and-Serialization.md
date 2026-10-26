@@ -851,6 +851,77 @@ const schema = {
 fastify.post('/url', { schema }, handler)
 ```
 
+#### The output validation
+
+The response body is produced in two steps:
+
+1. the **output validation**: the Ajv validator of the output side validates
+   the payload against the response schema of the route and shapes it — the
+   properties that the schema does not declare are removed from the payload;
+2. the **native `JSON.stringify()`**: the shaped payload is serialized.
+
+The order of the response pipeline is: the handler, the
+[`preResponseValidation`](./Hooks.md#preresponsevalidation) hook, the output
+validation, the [`preSerialization`](./Hooks.md#preserialization) hook, the
+serialization and the [`onSend`](./Hooks.md#onsend) hook.
+
+The output side is configured by the
+[`schemaController.outputValidatorOptions`](./Server.md#schema-controller) and
+the `schemaController.compilersFactory.buildOutputValidator` members.
+
+#### The differences from the v5 behaviour
+
+The schema still does the shaping, but the serialization itself is the native
+one. The differences a user can observe are:
+
+* **no type coercion**: a payload whose type does not match the schema is not
+  coerced, it answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error and
+  the Ajv `validation` array;
+* **no schema `default` on the wire**: a `default` of the response schema is
+  not injected into the body;
+* **the `preSerialization` hook owns what it writes**: the payload is shaped
+  *before* the hook runs, so a field that the hook adds reaches the wire;
+* **a property-less object schema answers `{}`**: an object schema that
+  declares no `properties` and no `patternProperties` strips every property of
+  the payload, exactly as the v5 serializer did.
+
+#### The native `JSON.stringify()` semantics
+
+The payload that reaches the serializer is a plain JavaScript value, so the
+semantics of the native `JSON.stringify()` apply:
+
+* a `BigInt` throws a `TypeError`;
+* a `Date` is serialized as its ISO string;
+* an `undefined` property is omitted;
+* `NaN` and `Infinity` become `null`.
+
+#### The property order
+
+The properties are emitted in the order of the **payload**, not in the order of
+the schema. The two orders can differ and the bytes follow the payload.
+
+#### The error path
+
+An error that a route answers is serialized by the same pipeline: when the
+route declares an error schema that matches the status code and the content
+type, the error body is validated and shaped by the output validator and then
+serialized. When no schema matches, the built-in error serializer answers.
+
+Two divergences of the error path are worth knowing:
+
+* an error body that does **not** satisfy its own error schema answers HTTP
+  500 with the `FST_ERR_FAILED_ERROR_SERIALIZATION` error — the error path
+  never recurses;
+* an error whose route declares an `$async` output schema is answered with the
+  built-in error serializer, because the error path does not await an
+  asynchronous validator.
+
+#### A custom serializer disables the response validation
+
+A reply that is handled by a custom serializer — [`reply.serializer(fn)`](./Reply.md#serializerfunc)
+or `fastify.setReplySerializer(fn)` — is never validated and never shaped: the
+payload reaches the wire as it is.
+
 #### Removed in v6
 <a id="schema-serializer"></a>
 
@@ -859,6 +930,15 @@ and `compilersFactory.buildSerializer` have been removed: they throw the
 `FST_ERR_SERIALIZER_COMPILER_REMOVED` error. The response body is produced by
 the native `JSON.stringify()`, after the response schema has validated and
 shaped the payload.
+
+The `reply.getSerializationFunction()`, `reply.compileSerializationSchema()`
+and `reply.serializeInput()` helpers are removed as well, and the
+`serializerOpts` server option is rejected at boot with the
+`FST_ERR_SERIALIZER_OPTS_REMOVED` error. The `reply.serialize(payload)` helper
+survives as an alias of `JSON.stringify(payload)`.
+
+See the V5 to V6 migration guide for the one-line replacement of every removed
+symbol.
 
 *To set a custom serializer in a specific part of the code, use
 [`reply.serializer(...)`](./Reply.md#serializerfunc).*

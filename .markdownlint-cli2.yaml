@@ -18,5 +18,7 @@ globs:
 ignores:
   - 'node_modules/**'
   - 'test/**/*.md'
+  # The planning directory is not part of the repository: it is gitignored.
+  - '.planning/**'
 
 noProgress: true

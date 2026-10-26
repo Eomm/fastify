@@ -1,5 +1,4 @@
 import { BuildCompilerFromPool, StandaloneValidator } from '@fastify/ajv-compiler'
-import { StandaloneSerializer } from '@fastify/fast-json-stringify-compiler'
 import Ajv from 'ajv'
 import { expect } from 'tstyche'
 import fastify, { FastifyInstance, FastifySchema } from '../../fastify.js'
@@ -58,10 +57,6 @@ expect(server.setValidatorCompiler(({ schema }) => {
   return new Ajv().compile(schema)
 })).type.toBe<FastifyInstance>()
 
-expect(server.setSerializerCompiler(() => {
-  return data => JSON.stringify(data)
-})).type.toBe<FastifyInstance>()
-
 expect(server.post('/test', {
   validatorCompiler: ({ schema }) => {
     return data => {
@@ -100,10 +95,6 @@ expect(server.setValidatorCompiler<FastifySchema & { validate: Record<string, un
   }
 )).type.toBe<FastifyInstance>()
 
-expect(server.setSerializerCompiler<FastifySchema & { validate: string }>(
-  () => data => JSON.stringify(data)
-)).type.toBe<FastifyInstance>()
-
 // https://github.com/fastify/ajv-compiler/issues/95
 {
   const factory = StandaloneValidator({
@@ -115,21 +106,6 @@ expect(server.setSerializerCompiler<FastifySchema & { validate: string }>(
     schemaController: {
       compilersFactory: {
         buildValidator: factory
-      }
-    }
-  })
-}
-
-{
-  const factory = StandaloneSerializer({
-    readMode: false,
-    storeFunction (routeOpts, schemaValidationCode) { }
-  })
-
-  fastify({
-    schemaController: {
-      compilersFactory: {
-        buildSerializer: factory
       }
     }
   })

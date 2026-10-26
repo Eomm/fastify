@@ -5,7 +5,6 @@ import { Socket } from 'node:net'
 
 import { BuildCompilerFromPool, ValidatorFactory } from '@fastify/ajv-compiler'
 import { FastifyError } from '@fastify/error'
-import { Options as FJSOptions, SerializerFactory } from '@fastify/fast-json-stringify-compiler'
 import { ConstraintStrategy, Config as FindMyWayConfig, HTTPVersion } from 'find-my-way'
 import { InjectOptions, CallbackFunc as LightMyRequestCallback, Chain as LightMyRequestChain, Response as LightMyRequestResponse } from 'light-my-request'
 
@@ -141,7 +140,6 @@ declare namespace fastify {
     onConstructorPoisoning?: ConstructorAction,
     logger?: boolean | FastifyLoggerOptions<RawServer> & PinoLoggerOptions,
     loggerInstance?: Logger
-    serializerOpts?: FJSOptions | Record<string, unknown>,
     serverFactory?: FastifyServerFactory<RawServer>,
     requestIdHeader?: string | false,
     genReqId?: (req: RawRequestDefaultExpression<RawServer>) => string,
@@ -154,7 +152,6 @@ declare namespace fastify {
       };
       compilersFactory?: {
         buildValidator?: ValidatorFactory;
-        buildSerializer?: SerializerFactory;
         buildOutputValidator?: ValidatorFactory;
       };
       outputValidatorOptions?: Parameters<BuildCompilerFromPool>[1];

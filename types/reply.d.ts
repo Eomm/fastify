@@ -71,27 +71,13 @@ export interface FastifyReply<
     TypeProvider>;
   serializer(fn: (payload: any) => string): FastifyReply<RouteGeneric, RawServer, RawRequest, RawReply, ContextConfig,
     SchemaCompiler, TypeProvider>;
+  /**
+   * Serialize the payload with the native `JSON.stringify(payload)`.
+   *
+   * It does not consult the route schema, the output validator, the custom
+   * `reply.serializer(fn)` nor the route level `replySerializer`.
+   */
   serialize(payload: any): string | ArrayBuffer | Buffer;
-  // Serialization Methods
-  getSerializationFunction(
-    httpStatus: string,
-    contentType?: string
-  ): ((payload: { [key: string]: unknown }) => string) | undefined;
-  getSerializationFunction(
-    schema: { [key: string]: unknown }
-  ): ((payload: { [key: string]: unknown }) => string) | undefined;
-  compileSerializationSchema(
-    schema: { [key: string]: unknown },
-    httpStatus?: string,
-    contentType?: string
-  ): (payload: { [key: string]: unknown }) => string;
-  serializeInput(
-    input: { [key: string]: unknown },
-    schema: { [key: string]: unknown },
-    httpStatus?: string,
-    contentType?: string
-  ): string;
-  serializeInput(input: { [key: string]: unknown }, httpStatus: string, contentType?: string): unknown;
   then(fulfilled: () => void, rejected: (err: Error) => void): void;
   trailer: (
     key: string,

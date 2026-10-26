@@ -18,7 +18,7 @@ import { FindMyWayVersion } from '../../types/instance.js'
 import { Bindings, ChildLoggerOptions } from '../../types/logger.js'
 import { FastifyReply } from '../../types/reply.js'
 import { FastifyRequest } from '../../types/request.js'
-import { FastifySchemaCompiler, FastifySchemaControllerOptions, FastifySerializerCompiler } from '../../types/schema.js'
+import { FastifySchemaCompiler, FastifySchemaControllerOptions } from '../../types/schema.js'
 
 const server = fastify()
 
@@ -595,4 +595,3 @@ expect(server.addConstraintStrategy(versionConstraintStrategy)).type.toBe<void>(
 expect(server.hasConstraintStrategy(versionConstraintStrategy.name)).type.toBe<boolean>()
 
 expect(server.validatorCompiler).type.toBe<FastifySchemaCompiler<any> | undefined>()
-expect(server.serializerCompiler).type.toBe<FastifySerializerCompiler<any> | undefined>()

@@ -16,7 +16,6 @@ import { ResolveReplyTypeWithRouteGeneric } from '../../types/reply.js'
 import { FastifyRouteConfig, RouteGenericInterface } from '../../types/route.js'
 import { ContextConfigDefault, RawReplyDefaultExpression, RawServerDefault } from '../../types/utils.js'
 
-type DefaultSerializationFunction = (payload: { [key: string]: unknown }) => string
 type DefaultFastifyReplyWithCode<Code extends number> = FastifyReply<RouteGenericInterface, RawServerDefault, RawRequestDefaultExpression, RawReplyDefaultExpression, ContextConfigDefault, FastifySchema, FastifyTypeProviderDefault, ResolveReplyTypeWithRouteGeneric<RouteGenericInterface['Reply'], Code, FastifySchema, FastifyTypeProviderDefault>>
 
 const getHandler: RouteHandlerMethod = function (_request, reply) {
@@ -59,21 +58,6 @@ const getHandler: RouteHandlerMethod = function (_request, reply) {
   expect(reply.hasTrailer).type.toBe<(key: string) => boolean>()
   expect(reply.removeTrailer).type.toBe<(key: string) => FastifyReply>()
   expect(reply.server).type.toBe<FastifyInstance>()
-  expect(reply.getSerializationFunction).type.toBeAssignableTo<
-    ((httpStatus: string) => DefaultSerializationFunction | undefined)
-  >()
-  expect(reply.getSerializationFunction).type.toBeAssignableTo<
-    ((schema: { [key: string]: unknown }) => DefaultSerializationFunction | undefined)
-  >()
-  expect(reply.compileSerializationSchema).type.toBeAssignableTo<
-    ((schema: { [key: string]: unknown }, httpStatus?: string) => DefaultSerializationFunction)
-  >()
-  expect(reply.serializeInput).type.toBeAssignableTo<
-    ((input: { [key: string]: unknown }, schema: { [key: string]: unknown }, httpStatus?: string) => unknown)
-  >()
-  expect(reply.serializeInput).type.toBeAssignableTo<
-    ((input: { [key: string]: unknown }, httpStatus: string) => unknown)
-  >()
   expect(reply.routeOptions.config).type.toBe<ContextConfigDefault & FastifyRouteConfig & FastifyContextConfig>()
   expect(reply.getDecorator<string>('foo')).type.toBe<string>()
 }

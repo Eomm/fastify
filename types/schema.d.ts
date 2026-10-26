@@ -1,5 +1,4 @@
 import { BuildCompilerFromPool, ValidatorFactory } from '@fastify/ajv-compiler'
-import { SerializerFactory } from '@fastify/fast-json-stringify-compiler'
 import { FastifyInstance, SafePromiseLike } from '../fastify'
 /**
  * Schemas in Fastify follow the JSON-Schema standard. For this reason
@@ -52,7 +51,6 @@ export interface FastifySchemaControllerOptions {
   };
   compilersFactory?: {
     buildValidator?: ValidatorFactory;
-    buildSerializer?: SerializerFactory;
     buildOutputValidator?: ValidatorFactory;
   };
   outputValidatorOptions?: Parameters<BuildCompilerFromPool>[1];

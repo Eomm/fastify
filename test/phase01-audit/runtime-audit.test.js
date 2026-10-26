@@ -6,6 +6,7 @@
 // an automated check.
 
 const { test } = require('node:test')
+const assert = require('node:assert')
 const Fastify = require('../..')
 const { getResponseSchemaEntry } = require('../../lib/schemas')
 const {
@@ -706,4 +707,225 @@ test('01-02/T3: the error handler serializer lookup uses the response schema of 
   // The error body is serialized with the 500 schema of the route: only the
   // declared property is on the wire.
   t.assert.deepStrictEqual(JSON.parse(result.payload), { message: 'boom' })
+})
+
+// ---------------------------------------------------------------------------
+// 01-04 / task 1 — the preResponseValidation hook
+// ---------------------------------------------------------------------------
+
+test('01-04/T1: the preResponseValidation hook runs after the handler and before the output validator', async (t) => {
+  const app = Fastify()
+  t.after(() => app.close())
+
+  const order = []
+  app.addHook('preResponseValidation', async (request, reply, payload) => {
+    order.push('hook')
+    t.assert.deepStrictEqual(payload, { n: 1 }, 'the hook observes the payload of the handler')
+    // The hook shapes the payload that will be validated.
+    payload.n = 'not a number'
+    return payload
+  })
+
+  app.get('/', {
+    schema: { response: { 200: { type: 'object', properties: { n: { type: 'number' } } } } }
+  }, async () => {
+    order.push('handler')
+    return { n: 1 }
+  })
+
+  const result = await app.inject('/')
+  t.assert.deepStrictEqual(order, ['handler', 'hook'])
+  t.assert.strictEqual(result.statusCode, 500)
+  t.assert.strictEqual(JSON.parse(result.payload).code, 'FST_ERR_OUTPUT_VALIDATION')
+})
+
+test('01-04/T1: the preResponseValidation hook is accepted at the instance and at the route level', async (t) => {
+  const app = Fastify()
+  t.after(() => app.close())
+
+  const seen = []
+  app.addHook('preResponseValidation', (request, reply, payload, done) => {
+    seen.push('instance')
+    done(null, payload)
+  })
+
+  app.get('/instance', {
+    schema: { response: { 200: { type: 'object' } } },
+    preResponseValidation: (request, reply, payload, done) => {
+      seen.push('route')
+      done(null, payload)
+    }
+  }, async () => ({}))
+
+  const result = await app.inject('/instance')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.deepStrictEqual(seen, ['instance', 'route'])
+})
+
+test('01-04/T1: the four argument async form is rejected at registration, the three argument form is accepted', async (t) => {
+  const instance = Fastify()
+  t.after(() => instance.close())
+
+  t.assert.throws(
+    () => instance.addHook('preResponseValidation', async (request, reply, payload, done) => {}),
+    (err) => err.code === 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER',
+    'the instance level rejects the four argument async form'
+  )
+
+  assert.doesNotThrow(
+    () => instance.addHook('preResponseValidation', async (request, reply, payload) => payload),
+    'the three argument async form is legal'
+  )
+
+  const route = Fastify()
+  t.after(() => route.close())
+
+  t.assert.throws(
+    () => route.get('/four', {
+      preResponseValidation: [
+        async (request, reply, payload, done) => {}
+      ]
+    }, async () => ({})),
+    (err) => err.code === 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER',
+    'the route level rejects the four argument async form'
+  )
+})
+
+// ---------------------------------------------------------------------------
+// 01-04 / task 2 — a failing hook
+// ---------------------------------------------------------------------------
+
+test('01-04/T2: a throwing preResponseValidation hook goes to the error handler and skips the validation', async (t) => {
+  let validated = 0
+  let capturedError = null
+  const app = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            validated++
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => app.close())
+
+  app.addHook('preResponseValidation', () => {
+    throw new Error('hook failed')
+  })
+
+  app.setErrorHandler((error, request, reply) => {
+    capturedError = error
+    reply.send(error)
+  })
+
+  app.get('/', {
+    schema: { response: { 200: { type: 'object' } } }
+  }, async () => ({}))
+
+  const result = await app.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  t.assert.ok(capturedError, 'the error reached the error handler')
+  t.assert.strictEqual(capturedError.message, 'hook failed')
+  t.assert.strictEqual(validated, 0, 'the output validator has not been invoked')
+})
+
+test('01-04/T2: a done(err) preResponseValidation hook goes to the error handler and skips the validation', async (t) => {
+  let validated = 0
+  let capturedError = null
+  const app = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            validated++
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => app.close())
+
+  app.addHook('preResponseValidation', (request, reply, payload, done) => {
+    done(new Error('hook failed'))
+  })
+
+  app.setErrorHandler((error, request, reply) => {
+    capturedError = error
+    reply.send(error)
+  })
+
+  app.get('/', {
+    schema: { response: { 200: { type: 'object' } } }
+  }, async () => ({}))
+
+  const result = await app.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  t.assert.ok(capturedError, 'the error reached the error handler')
+  t.assert.strictEqual(capturedError.message, 'hook failed')
+  t.assert.strictEqual(validated, 0, 'the output validator has not been invoked')
+})
+
+test('01-04/T2: a failing preResponseValidation hook does not affect the other requests', async (t) => {
+  const app = Fastify()
+  t.after(() => app.close())
+
+  app.addHook('preResponseValidation', (request, reply, payload, done) => {
+    if (request.headers['x-fail'] === 'true') {
+      done(new Error('hook failed'))
+      return
+    }
+    done(null, payload)
+  })
+
+  app.get('/', {
+    schema: { response: { 200: { type: 'object', properties: { n: { type: 'number' } } } } }
+  }, async () => ({ n: 1 }))
+
+  const failing = await app.inject({ method: 'GET', url: '/', headers: { 'x-fail': 'true' } })
+  t.assert.strictEqual(failing.statusCode, 500)
+
+  const ok = await app.inject({ method: 'GET', url: '/' })
+  t.assert.strictEqual(ok.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(ok.payload), { n: 1 })
+})
+
+test('01-04/T2: the preResponseValidation hook still runs when a custom reply serializer is in use', async (t) => {
+  const app = Fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator () {
+          return () => () => {
+            t.assert.fail('the output validator has been invoked for a reply with a custom serializer')
+            return true
+          }
+        }
+      }
+    }
+  })
+  t.after(() => app.close())
+
+  let hookRan = false
+  let observed = null
+  app.addHook('preResponseValidation', (request, reply, payload, done) => {
+    hookRan = true
+    observed = payload
+    done(null, payload)
+  })
+
+  app.get('/', {
+    schema: { response: { 200: { type: 'object', properties: { n: { type: 'number' } } } } }
+  }, async (req, reply) => {
+    reply.serializer((payload) => JSON.stringify({ custom: payload }))
+    return { n: 'not a number' }
+  })
+
+  const result = await app.inject('/')
+  t.assert.ok(hookRan, 'the hook has run')
+  t.assert.deepStrictEqual(observed, { n: 'not a number' })
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(result.payload), { custom: { n: 'not a number' } })
 })

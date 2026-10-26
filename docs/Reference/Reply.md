@@ -689,9 +689,8 @@ end user.
 <a id="send-object"></a>
 
 As noted above, if you are sending JSON objects, `send` will serialize the
-object with
-[fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify) if you
-set an output schema, otherwise, `JSON.stringify()` will be used.
+object with `JSON.stringify()`. When the route declares an output schema, the
+payload is validated and shaped by that schema before it is serialized.
 ```js
 fastify.get('/json', options, function (request, reply) {
   reply.send({ hello: 'world' })

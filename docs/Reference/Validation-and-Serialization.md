@@ -16,10 +16,9 @@ All examples use the
 specification.
 
 > ⚠ Warning:
-> Treat schema definitions as application code. Validation and serialization
-> features use `new Function()`, which is unsafe with user-provided schemas. See
-> [Ajv](https://www.npmjs.com/package/ajv) and
-> [fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify) for details.
+> Treat schema definitions as application code. Validation features use
+> `new Function()`, which is unsafe with user-provided schemas. See
+> [Ajv](https://www.npmjs.com/package/ajv) for details.
 >
 > Whilst Fastify supports the
 > [`$async` Ajv feature](https://ajv.js.org/guide/async-validation.html),
@@ -36,12 +35,12 @@ specification.
 
 ### Core concepts
 Validation and serialization are handled by two customizable dependencies:
-- [Ajv v8](https://www.npmjs.com/package/ajv) for request validation
-- [fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify) for
-  response body serialization
+- [Ajv v8](https://www.npmjs.com/package/ajv) for the request validation and
+  for the response validation
+- the native `JSON.stringify()` for the response body serialization
 
-These dependencies share only the JSON schemas added to Fastify's instance via
-`.addSchema(schema)`.
+The request side and the response side share the JSON schemas added to
+Fastify's instance via `.addSchema(schema)`.
 
 #### Adding a shared schema
 <a id="shared-schema"></a>
@@ -741,9 +740,10 @@ const errorHandler = (error, request, reply) => {
 ### Serialization
 <a id="serialization"></a>
 
-Fastify uses [fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify)
-to send data as JSON if an output schema is provided in the route options. Using
-an output schema can drastically increase throughput and help prevent accidental
+Fastify sends data as JSON with the native `JSON.stringify()`. When an output
+schema is provided in the route options, the schema validates and shapes the
+payload before it is serialized: the properties that the schema does not
+declare are removed from the response, which helps prevent accidental
 disclosure of sensitive information.
 
 Example:
@@ -851,35 +851,14 @@ const schema = {
 fastify.post('/url', { schema }, handler)
 ```
 
-#### Serializer Compiler
+#### Removed in v6
 <a id="schema-serializer"></a>
 
-The `serializerCompiler` returns a function that must return a string from an
-input object. When defining a response JSON Schema, change the default
-serialization method by providing a function to serialize each route.
-
-```js
-fastify.setSerializerCompiler(({ schema, method, url, httpStatus, contentType }) => {
-  return data => JSON.stringify(data)
-})
-
-fastify.get('/user', {
-  handler (req, reply) {
-    reply.send({ id: 1, name: 'Foo', image: 'BIG IMAGE' })
-  },
-  schema: {
-    response: {
-      '2xx': {
-        type: 'object',
-        properties: {
-          id: { type: 'number' },
-          name: { type: 'string' }
-        }
-      }
-    }
-  }
-})
-```
+`fastify.setSerializerCompiler()`, the route level `serializerCompiler` option
+and `compilersFactory.buildSerializer` have been removed: they throw the
+`FST_ERR_SERIALIZER_COMPILER_REMOVED` error. The response body is produced by
+the native `JSON.stringify()`, after the response schema has validated and
+shaped the payload.
 
 *To set a custom serializer in a specific part of the code, use
 [`reply.serializer(...)`](./Reply.md#serializerfunc).*
@@ -1194,8 +1173,6 @@ const refToSharedSchemaDefinitions = {
 - [JSON Schema](https://json-schema.org/)
 - [Understanding JSON
   Schema](https://json-schema.org/understanding-json-schema/about)
-- [fast-json-stringify
-  documentation](https://github.com/fastify/fast-json-stringify)
 - [Ajv documentation](https://github.com/ajv-validator/ajv/blob/master/README.md)
 - [Ajv i18n](https://github.com/ajv-validator/ajv-i18n)
 - [Ajv custom errors](https://github.com/ajv-validator/ajv-errors)

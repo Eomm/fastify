@@ -31,7 +31,6 @@ describes the properties available in that options object.
   - [`exposeHeadRoutes`](#exposeheadroutes)
   - [`return503OnClosing`](#return503onclosing)
   - [`ajv`](#ajv)
-  - [`serializerOpts`](#serializeropts)
   - [`http2SessionTimeout`](#http2sessiontimeout)
   - [`frameworkErrors`](#frameworkerrors)
   - [`clientErrorHandler`](#clienterrorhandler)
@@ -702,20 +701,12 @@ const fastify = require('fastify')({
 })
 ```
 
-### `serializerOpts`
+### Removed in v6
 <a id="serializer-opts"></a>
 
-Customize the options of the default
-[`fast-json-stringify`](https://github.com/fastify/fast-json-stringify#options)
-instance that serializes the response's payload:
-
-```js
-const fastify = require('fastify')({
-  serializerOpts: {
-    rounding: 'ceil'
-  }
-})
-```
+The `serializerOpts` server option has been removed: `Fastify({ serializerOpts })`
+throws the `FST_ERR_SERIALIZER_OPTS_REMOVED` error. The response payload is
+serialized with the native `JSON.stringify()`.
 
 ### `http2SessionTimeout`
 <a id="http2-session-timeout"></a>
@@ -1834,8 +1825,8 @@ const fastify = Fastify({
     },
 
     /**
-     * The compilers factory lets you fully control the validator and serializer
-     * in the Fastify's lifecycle, providing the encapsulation to your compilers.
+     * The compilers factory lets you fully control the validator in the
+     * Fastify's lifecycle, providing the encapsulation to your compilers.
      */
     compilersFactory: {
       /**
@@ -1857,20 +1848,19 @@ const fastify = Fastify({
       },
 
       /**
-       * This factory is called whenever a new serializer instance is needed.
+       * This factory is called whenever a new output validator instance is needed.
        * It may be called whenever `fastify.register()` is called only if new schemas have been added to the
        * encapsulation context.
        * It may receive as input the schemas of the parent context if some schemas have been added.
        * @param {object} externalSchemas these schemas will be returned by the
        * `bucket.getSchemas()`. Needed to resolve the external references $ref.
-       * @param {object} serializerOptsServerOption the server `serializerOpts`
-       * options to build your compilers accordingly
+       * @param {object} outputValidatorOptions the `schemaController.outputValidatorOptions` options
        */
-      buildSerializer: function factory (externalSchemas, serializerOptsServerOption) {
-        // This factory function must return a schema serializer compiler.
-        // See [#schema-serializer](./Validation-and-Serialization.md#schema-serializer) for details.
-        return function serializerCompiler ({ schema, method, url, httpStatus, contentType }) {
-          return data => JSON.stringify(data)
+      buildOutputValidator: function factory (externalSchemas, outputValidatorOptions) {
+        // This factory function must return a schema validator compiler.
+        const yourAjvInstance = new Ajv(outputValidatorOptions.customOptions)
+        return function validatorCompiler ({ schema, method, url, httpStatus, contentType }) {
+          return yourAjvInstance.compile(schema)
         }
       }
     }

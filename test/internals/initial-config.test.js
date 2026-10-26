@@ -8,6 +8,7 @@ const pino = require('pino')
 const split = require('split2')
 const deepClone = require('rfdc')({ circles: true, proto: false })
 const { deepFreezeObject } = require('../../lib/initial-config-validation').utils
+const validateConfig = require('../../lib/config-validator')
 
 const { buildCertificate } = require('../build-certificate')
 
@@ -399,5 +400,126 @@ test('Should not mutate the options object outside Fastify', async t => {
     t.assert.ok(true)
   } catch (error) {
     t.assert.fail(error.message)
+  }
+})
+
+test('the serializerOpts server option is rejected at boot', t => {
+  t.plan(5)
+
+  try {
+    Fastify({ serializerOpts: { rounding: 'ceil' } })
+
+    t.assert.fail()
+  } catch (error) {
+    t.assert.ok(error instanceof Error)
+    t.assert.strictEqual(error.name, 'FastifyError')
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_OPTS_REMOVED')
+    t.assert.ok(error.message.includes('serializerOpts'), 'the message names the option')
+    t.assert.ok(error.message.includes('migration guide'), 'the message points at the migration guide')
+  }
+})
+
+test('an undefined serializerOpts is not a present option', t => {
+  t.plan(1)
+
+  const fastify = Fastify({ serializerOpts: undefined })
+  t.assert.ok(fastify)
+})
+
+test('the generated validator rejects the serializerOpts key', t => {
+  t.plan(2)
+
+  t.assert.strictEqual(validateConfig({ serializerOpts: { rounding: 'ceil' } }), false)
+  t.assert.ok(validateConfig.errors.some(error => error.instancePath === '/serializerOpts'))
+})
+
+test('the serializer factory is rejected at boot', t => {
+  t.plan(3)
+
+  try {
+    Fastify({ compilersFactory: { buildSerializer: () => () => JSON.stringify({}) } })
+
+    t.assert.fail()
+  } catch (error) {
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+    t.assert.ok(error.message.includes('compilersFactory.buildSerializer'))
+    t.assert.ok(error.message.includes('migration guide'))
+  }
+})
+
+test('the serializer factory of the schema controller is rejected at boot', t => {
+  t.plan(2)
+
+  try {
+    Fastify({ schemaController: { compilersFactory: { buildSerializer: () => () => JSON.stringify({}) } } })
+
+    t.assert.fail()
+  } catch (error) {
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+    t.assert.ok(error.message.includes('compilersFactory.buildSerializer'))
+  }
+})
+
+test('setSerializerCompiler and the serializerCompiler accessor fail explicitly', t => {
+  t.plan(3)
+
+  const fastify = Fastify()
+
+  try {
+    fastify.setSerializerCompiler(() => () => JSON.stringify({}))
+    t.assert.fail()
+  } catch (error) {
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+    t.assert.ok(error.message.includes('migration guide'))
+  }
+
+  try {
+    fastify.serializerCompiler
+    t.assert.fail()
+  } catch (error) {
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+  }
+})
+
+test('the route level serializerCompiler option is rejected at registration', t => {
+  t.plan(2)
+
+  const fastify = Fastify()
+
+  try {
+    fastify.get('/', { serializerCompiler: () => () => JSON.stringify({}) }, () => {})
+    t.assert.fail()
+  } catch (error) {
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+    t.assert.ok(error.message.includes('serializerCompiler'))
+  }
+})
+
+test('the reply serialization helpers fail explicitly', async t => {
+  t.plan(7)
+
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const errors = []
+
+  fastify.get('/', (request, reply) => {
+    for (const helper of ['getSerializationFunction', 'compileSerializationSchema', 'serializeInput']) {
+      try {
+        reply[helper]()
+        errors.push(null)
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    reply.send({ hello: 'world' })
+  })
+
+  const response = await fastify.inject('/')
+  t.assert.strictEqual(response.statusCode, 200)
+
+  for (const error of errors) {
+    t.assert.ok(error, 'the helper has thrown')
+    t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
   }
 })

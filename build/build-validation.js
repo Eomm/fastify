@@ -97,6 +97,10 @@ const schema = {
     requestIdHeader: { anyOf: [{ type: 'boolean' }, { type: 'string' }], default: defaultInitOptions.requestIdHeader },
     http2SessionTimeout: { type: 'integer', default: defaultInitOptions.http2SessionTimeout },
     exposeHeadRoutes: { type: 'boolean', default: defaultInitOptions.exposeHeadRoutes },
+    // The `serializerOpts` server option is gone with `fast-json-stringify`:
+    // the generated validator rejects the key instead of silently dropping it
+    // (the pool removes the unknown properties).
+    serializerOpts: false,
     routerOptions: {
       type: 'object',
       additionalProperties: false,

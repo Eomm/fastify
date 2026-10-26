@@ -3800,10 +3800,11 @@ test('a payload made invalid by a preSerialization hook is not validated again',
   t.assert.strictEqual(JSON.parse(invalid.payload).code, 'FST_ERR_OUTPUT_VALIDATION')
 
   // The `preSerialization` hook runs after the validation, so the payload it
-  // produces is never validated again.
+  // produces is never validated again. The payload is shaped before the hooks
+  // run: the value that the hook writes is the one that reaches the wire.
   const valid = await fastify.inject('/valid')
   t.assert.strictEqual(valid.statusCode, 200)
-  t.assert.deepStrictEqual(JSON.parse(valid.payload), { hello: 'world', count: 42 })
+  t.assert.deepStrictEqual(JSON.parse(valid.payload), { hello: 'world', count: '42' })
 })
 
 test('a preResponseValidation hook that throws is handled by the error handler and skips the output validation', async t => {

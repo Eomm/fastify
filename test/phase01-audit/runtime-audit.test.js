@@ -274,7 +274,10 @@ test('01-01/T3: a user supplied compilersFactory.buildOutputValidator replaces t
             calls.compiler++
             t.assert.strictEqual(httpStatus, '200')
             t.assert.strictEqual(contentType, undefined)
-            t.assert.deepStrictEqual(schema, { type: 'object' })
+            // The parity rules are applied to the response schema before it
+            // is compiled: a property-less object schema gets an empty
+            // `properties` map, exactly as `fast-json-stringify` did.
+            t.assert.deepStrictEqual(schema, { type: 'object', properties: {} })
             return (payload) => {
               calls.validator++
               return payload.accepted === true
@@ -369,9 +372,11 @@ test('01-02/T1: the validation stage runs before the preSerialization hooks', as
 
   const result = await app.inject('/')
   // The payload the `preSerialization` hook produced is never validated
-  // again: the response is not an output validation failure.
+  // again: the response is not an output validation failure. The payload is
+  // shaped before the hooks run: the property that the hook adds reaches the
+  // wire.
   t.assert.strictEqual(result.statusCode, 200)
-  t.assert.deepStrictEqual(JSON.parse(result.payload), { n: 1 })
+  t.assert.deepStrictEqual(JSON.parse(result.payload), { n: 1, injected: 'not a number' })
 })
 
 test('01-02/T1: a route without schema.response is not validated', async (t) => {
@@ -472,7 +477,9 @@ test('01-02/T1: the null payload is not validated', async (t) => {
   const result = await app.inject('/')
   t.assert.strictEqual(validated, 0, 'the validator has never been invoked')
   t.assert.strictEqual(result.statusCode, 200)
-  t.assert.strictEqual(result.payload, '{}')
+  // The body is the one of the native `JSON.stringify`, which emits `null`
+  // where `fast-json-stringify` emitted `{}`.
+  t.assert.strictEqual(result.payload, 'null')
 })
 
 test('01-02/T1: a custom reply.serializer(fn) skips the validation', async (t) => {

@@ -76,7 +76,8 @@ const {
   FST_ERR_ERROR_HANDLER_NOT_FN,
   FST_ERR_ERROR_HANDLER_ALREADY_SET,
   FST_ERR_ROUTE_METHOD_INVALID,
-  FST_ERR_ROUTE_METHOD_ALREADY_SUPPORTED
+  FST_ERR_ROUTE_METHOD_ALREADY_SUPPORTED,
+  FST_ERR_SERIALIZER_COMPILER_REMOVED
 } = errorCodes
 
 const { buildErrorHandler } = require('./lib/error-handler.js')
@@ -337,7 +338,11 @@ function fastify (serverOptions) {
     },
     serializerCompiler: {
       configurable: true,
-      get () { return this[kSchemaController].getSerializerCompiler() }
+      get () {
+        // The serializer compiler is gone with `fast-json-stringify`: the
+        // accessor must not expose a compiler that does not exist.
+        throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('serializerCompiler')
+      }
     },
     childLoggerFactory: {
       configurable: true,
@@ -771,9 +776,9 @@ function fastify (serverOptions) {
   }
 
   function setSerializerCompiler (serializerCompiler) {
-    throwIfAlreadyStarted('Cannot call "setSerializerCompiler"!')
-    this[kSchemaController].setSerializerCompiler(serializerCompiler)
-    return this
+    // The serializer compiler is gone with `fast-json-stringify`: the method
+    // fails explicitly, it is never a silent no-op.
+    throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('fastify.setSerializerCompiler()')
   }
 
   function setSchemaController (schemaControllerOpts) {
@@ -903,6 +908,12 @@ function processOptions (options, defaultRoute, onBadUrl, onMaxParamLength) {
 
   if (options.schemaController && options.schemaController.bucket && typeof options.schemaController.bucket !== 'function') {
     throw new FST_ERR_SCHEMA_CONTROLLER_BUCKET_OPT_NOT_FN(typeof options.schemaController.bucket)
+  }
+
+  if (options.compilersFactory && options.compilersFactory.buildSerializer) {
+    // The serializer factory is gone with `fast-json-stringify`: its use is a
+    // hard error, never a silent fallback.
+    throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('compilersFactory.buildSerializer')
   }
 
   validateBodyLimitOption(options.bodyLimit)

@@ -5,7 +5,7 @@ const errors = require('../../lib/errors')
 const { readFileSync } = require('node:fs')
 const { resolve } = require('node:path')
 
-const expectedErrors = 95
+const expectedErrors = 97
 
 test(`should expose ${expectedErrors} errors`, t => {
   t.plan(1)
@@ -521,6 +521,26 @@ test('FST_ERR_OUTPUT_VALIDATION', t => {
   t.assert.strictEqual(error.name, 'FastifyError')
   t.assert.strictEqual(error.code, 'FST_ERR_OUTPUT_VALIDATION')
   t.assert.strictEqual(error.message, 'Response validation failed. Errors: /hello must be number')
+  t.assert.strictEqual(error.statusCode, 500)
+  t.assert.ok(error instanceof Error)
+})
+
+test('FST_ERR_SERIALIZER_COMPILER_REMOVED', t => {
+  t.plan(5)
+  const error = new errors.FST_ERR_SERIALIZER_COMPILER_REMOVED('fastify.setSerializerCompiler()')
+  t.assert.strictEqual(error.name, 'FastifyError')
+  t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+  t.assert.strictEqual(error.message, "The serializer compiler has been removed in Fastify v6: 'fastify.setSerializerCompiler()' is not supported any more. See the V5 to V6 migration guide for the alternatives.")
+  t.assert.strictEqual(error.statusCode, 500)
+  t.assert.ok(error instanceof Error)
+})
+
+test('FST_ERR_SERIALIZER_OPTS_REMOVED', t => {
+  t.plan(5)
+  const error = new errors.FST_ERR_SERIALIZER_OPTS_REMOVED()
+  t.assert.strictEqual(error.name, 'FastifyError')
+  t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_OPTS_REMOVED')
+  t.assert.strictEqual(error.message, "The 'serializerOpts' server option has been removed in Fastify v6. See the V5 to V6 migration guide for the alternatives.")
   t.assert.strictEqual(error.statusCode, 500)
   t.assert.ok(error instanceof Error)
 })

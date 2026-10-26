@@ -25,6 +25,8 @@
  *
  *   --duration=<s>     the duration of one measurement, in seconds (default: 10)
  *   --connections=<n>  the connections of one measurement (default: 100)
+ *   --runs=<n>         the repetitions of one measurement, the best is kept
+ *                      (default: 3)
  *   --port=<n>         the port of the server (default: 3000)
  *   --host=<host>      the host of the server (default: 127.0.0.1)
  */
@@ -34,6 +36,7 @@ const autocannon = require('autocannon')
 
 const DEFAULT_DURATION = 10
 const DEFAULT_CONNECTIONS = 100
+const DEFAULT_RUNS = 3
 const DEFAULT_PORT = 3000
 const DEFAULT_HOST = '127.0.0.1'
 
@@ -76,6 +79,7 @@ function parseArgs (argv) {
   const options = {
     duration: DEFAULT_DURATION,
     connections: DEFAULT_CONNECTIONS,
+    runs: DEFAULT_RUNS,
     port: DEFAULT_PORT,
     host: DEFAULT_HOST
   }
@@ -88,6 +92,9 @@ function parseArgs (argv) {
         break
       case '--connections':
         options.connections = Number(value)
+        break
+      case '--runs':
+        options.runs = Number(value)
         break
       case '--port':
         options.port = Number(value)
@@ -105,6 +112,9 @@ function parseArgs (argv) {
   }
   if (!Number.isInteger(options.connections) || options.connections < 1) {
     throw new Error(`Invalid connection count: ${options.connections}`)
+  }
+  if (!Number.isInteger(options.runs) || options.runs < 1) {
+    throw new Error(`Invalid run count: ${options.runs}`)
   }
 
   return options
@@ -138,19 +148,29 @@ function buildServer () {
 /**
  * Measures the request rate of one route.
  *
+ * A single noisy run is not a measurement: the route is measured `runs` times
+ * and the best run is kept.
+ *
  * @param {string} url the url of the route
  * @param {object} options the options of the script
- * @returns {Promise<number>} the average requests per second
+ * @returns {Promise<number>} the average requests per second of the best run
  */
 async function measureRoute (url, options) {
-  const result = await autocannon({
-    url,
-    connections: options.connections,
-    duration: options.duration,
-    pipelining: 1
-  })
+  let best = 0
+  for (let run = 0; run < options.runs; run++) {
+    const result = await autocannon({
+      url,
+      connections: options.connections,
+      duration: options.duration,
+      pipelining: 1
+    })
 
-  return result.requests.average
+    if (result.requests.average > best) {
+      best = result.requests.average
+    }
+  }
+
+  return best
 }
 
 /**
@@ -166,7 +186,7 @@ async function main () {
 
   const base = `http://${options.host}:${options.port}`
   console.log(`node ${process.version} (v8 ${process.versions.v8}) — ` +
-    `${options.connections} connections, ${options.duration}s per route`)
+    `${options.connections} connections, ${options.duration}s per route, best of ${options.runs} run(s)`)
 
   const v6 = await measureRoute(`${base}/v6`, options)
   const fjs = await measureRoute(`${base}/fjs`, options)

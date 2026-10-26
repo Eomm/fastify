@@ -81,6 +81,10 @@ node examples/benchmark/serialization-http.js --duration=30 --connections=200
 The numbers that were measured, with the machine, the Node.js versions and the
 exact commands, are in [serialization-results.md](./serialization-results.md).
 
+They were measured on **Node.js v24.22.1** (V8 13.6.233.17) and on
+**Node.js v25.9.0** (V8 14.1.146.11); the runtime of the sandbox (v22.23.3,
+V8 12.4.254.21) is measured as a reference.
+
 A Node.js version that could not be obtained is recorded as **missing** in
 that file: the numbers of another version are never presented as the numbers
 of the missing one.

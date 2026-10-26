@@ -35,14 +35,21 @@ test('basic test', (t, testDone) => {
   })
 })
 
-test('custom serializer options', (t, testDone) => {
-  t.plan(3)
+test('the serializerOpts server option is rejected at boot', (t, testDone) => {
+  t.plan(4)
 
-  const fastify = Fastify({
-    serializerOpts: {
-      rounding: 'ceil'
-    }
-  })
+  // The `serializerOpts` server option is gone with `fast-json-stringify`: it
+  // is rejected at boot, it is never ignored with a warning.
+  t.assert.throws(
+    () => Fastify({
+      serializerOpts: {
+        rounding: 'ceil'
+      }
+    }),
+    { code: 'FST_ERR_SERIALIZER_OPTS_REMOVED' }
+  )
+
+  const fastify = Fastify()
   fastify.get('/', {
     schema: {
       response: {
@@ -96,7 +103,7 @@ test('reuse parsed content type when selecting response serializer', async t => 
 })
 
 test('Different content types', (t, testDone) => {
-  t.plan(46)
+  t.plan(42)
 
   const fastify = Fastify()
   fastify.addSchema({
@@ -251,10 +258,6 @@ test('Different content types', (t, testDone) => {
   })
 
   fastify.get('/test', {
-    serializerCompiler: ({ contentType }) => {
-      t.assert.strictEqual(contentType, 'application/json')
-      return data => JSON.stringify(data)
-    },
     schema: {
       response: {
         200: {
@@ -678,51 +681,22 @@ test('Shared schema should be pass to serializer and validator ($ref to shared s
   })
 })
 
-test('Custom setSerializerCompiler', (t, testDone) => {
-  t.plan(7)
+test('setSerializerCompiler is not supported any more', (t, testDone) => {
+  t.plan(1)
   const fastify = Fastify({ exposeHeadRoutes: false })
 
-  const outSchema = {
-    $id: 'test',
-    type: 'object',
-    whatever: 'need to be parsed by the custom serializer'
-  }
+  // The serializer compiler is gone with `fast-json-stringify`: the method
+  // fails explicitly, it is never a silent no-op.
+  t.assert.throws(
+    () => fastify.setSerializerCompiler(() => () => { }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
 
-  fastify.setSerializerCompiler(({ schema, method, url, httpStatus }) => {
-    t.assert.strictEqual(method, 'GET')
-    t.assert.strictEqual(url, '/foo/:id')
-    t.assert.strictEqual(httpStatus, '200')
-    t.assert.deepStrictEqual(schema, outSchema)
-    return data => JSON.stringify(data)
-  })
-
-  fastify.register((instance, opts, done) => {
-    instance.get('/:id', {
-      handler (req, reply) {
-        reply.send({ id: 1 })
-      },
-      schema: {
-        response: {
-          200: outSchema
-        }
-      }
-    })
-    t.assert.ok(instance.serializerCompiler, 'the serializer is set by the parent')
-    done()
-  }, { prefix: '/foo' })
-
-  fastify.inject({
-    method: 'GET',
-    url: '/foo/123'
-  }, (err, res) => {
-    t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, JSON.stringify({ id: 1 }))
-    testDone()
-  })
+  testDone()
 })
 
-test('Custom setSerializerCompiler returns bad serialized output', (t, testDone) => {
-  t.plan(4)
+test('a custom reply serializer that returns an invalid payload is reported', (t, testDone) => {
+  t.plan(3)
   const fastify = Fastify()
 
   const outSchema = {
@@ -731,60 +705,11 @@ test('Custom setSerializerCompiler returns bad serialized output', (t, testDone)
     whatever: 'need to be parsed by the custom serializer'
   }
 
-  fastify.setSerializerCompiler(({ schema, method, url, httpStatus }) => {
-    return data => {
-      t.assert.ok('returning an invalid serialization')
-      return { not: 'a string' }
-    }
-  })
-
   fastify.get('/:id', {
-    handler (req, reply) { throw new Error('ops') },
-    schema: {
-      response: {
-        500: outSchema
-      }
-    }
-  })
-
-  fastify.inject({
-    method: 'GET',
-    url: '/123'
-  }, (err, res) => {
-    t.assert.ifError(err)
-    t.assert.strictEqual(res.statusCode, 500)
-    t.assert.deepStrictEqual(res.json(), {
-      code: 'FST_ERR_REP_INVALID_PAYLOAD_TYPE',
-      message: 'Attempted to send payload of invalid type \'object\'. Expected a string or Buffer.',
-      statusCode: 500
-    })
-    testDone()
-  })
-})
-
-test('Custom setSerializerCompiler with addSchema', (t, testDone) => {
-  t.plan(6)
-  const fastify = Fastify({ exposeHeadRoutes: false })
-
-  const outSchema = {
-    $id: 'test',
-    type: 'object',
-    whatever: 'need to be parsed by the custom serializer'
-  }
-
-  fastify.setSerializerCompiler(({ schema, method, url, httpStatus }) => {
-    t.assert.strictEqual(method, 'GET')
-    t.assert.strictEqual(url, '/foo/:id')
-    t.assert.strictEqual(httpStatus, '200')
-    t.assert.deepStrictEqual(schema, outSchema)
-    return _data => JSON.stringify({ id: 2 })
-  })
-
-  // provoke re-creation of serialization compiler in setupSerializer
-  fastify.addSchema({ $id: 'dummy', type: 'object' })
-
-  fastify.get('/foo/:id', {
-    handler (_req, reply) {
+    handler (req, reply) {
+      // The custom serializer of the reply owns the wire format: the output
+      // validation is skipped for it.
+      reply.serializer(() => ({ not: 'a string' }))
       reply.send({ id: 1 })
     },
     schema: {
@@ -796,12 +721,53 @@ test('Custom setSerializerCompiler with addSchema', (t, testDone) => {
 
   fastify.inject({
     method: 'GET',
-    url: '/foo/123'
+    url: '/123'
   }, (err, res) => {
     t.assert.ifError(err)
-    t.assert.strictEqual(res.payload, JSON.stringify({ id: 2 }))
+    t.assert.strictEqual(res.statusCode, 500)
+    t.assert.deepStrictEqual(res.json(), {
+      statusCode: 500,
+      code: 'FST_ERR_REP_INVALID_PAYLOAD_TYPE',
+      error: 'Internal Server Error',
+      message: 'Attempted to send payload of invalid type \'object\'. Expected a string or Buffer.'
+    })
     testDone()
   })
+})
+
+test('the output pool is built when a schema is added after the route registration', async t => {
+  const fastify = Fastify({ exposeHeadRoutes: false })
+
+  const outSchema = {
+    $id: 'test',
+    type: 'object',
+    properties: {
+      id: { type: 'number' }
+    }
+  }
+
+  // provoke the re-creation of the output pool in setupOutputValidator
+  fastify.addSchema({ $id: 'dummy', type: 'object' })
+
+  fastify.get('/foo/:id', {
+    handler (_req, reply) {
+      reply.send({ id: 1, extra: 'stripped' })
+    },
+    schema: {
+      response: {
+        200: outSchema
+      }
+    }
+  })
+
+  const res = await fastify.inject({
+    method: 'GET',
+    url: '/foo/123'
+  })
+  t.assert.strictEqual(res.statusCode, 200)
+  // The output validator shapes the payload: the property that the response
+  // schema does not declare never reaches the wire.
+  t.assert.strictEqual(res.payload, '{"id":1}')
 })
 
 test('Custom serializer per route', async t => {
@@ -820,42 +786,28 @@ test('Custom serializer per route', async t => {
     schema: { response: { 200: outSchema } }
   })
 
-  let hit = 0
-  fastify.register((instance, opts, done) => {
-    instance.setSerializerCompiler(({ schema, method, url, httpStatus }) => {
-      hit++
-      return data => JSON.stringify({ mean: 'custom' })
-    })
-    instance.get('/custom', {
-      handler (req, reply) { reply.send({}) },
-      schema: { response: { 200: outSchema } }
-    })
-    instance.get('/route', {
-      handler (req, reply) { reply.send({}) },
-      serializerCompiler: ({ schema, method, url, httpPart }) => {
-        hit++
-        return data => JSON.stringify({ mean: 'route' })
-      },
-      schema: { response: { 200: outSchema } }
-    })
+  // The serializer compilers are gone with `fast-json-stringify`: the
+  // instance level and the route level ones are both rejected explicitly.
+  t.assert.throws(
+    () => fastify.setSerializerCompiler(() => () => { }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
 
-    done()
-  })
+  t.assert.throws(
+    () => fastify.get('/route', {
+      handler (req, reply) { reply.send({}) },
+      serializerCompiler: () => () => { },
+      schema: { response: { 200: outSchema } }
+    }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
 
-  let res = await fastify.inject('/default')
+  const res = await fastify.inject('/default')
   t.assert.strictEqual(res.json().mean, 'default')
-
-  res = await fastify.inject('/custom')
-  t.assert.strictEqual(res.json().mean, 'custom')
-
-  res = await fastify.inject('/route')
-  t.assert.strictEqual(res.json().mean, 'route')
-
-  t.assert.strictEqual(hit, 4, 'the custom and route serializer has been called')
 })
 
 test('Reply serializer win over serializer ', (t, testDone) => {
-  t.plan(6)
+  t.plan(4)
 
   const fastify = Fastify()
   fastify.setReplySerializer(function (payload, statusCode) {
@@ -873,13 +825,6 @@ test('Reply serializer win over serializer ', (t, testDone) => {
             work: { type: 'string' }
           }
         }
-      }
-    },
-    serializerCompiler: ({ schema, method, url, httpPart }) => {
-      t.assert.ok(method, 'the custom compiler has been created')
-      return () => {
-        t.assert.fail('the serializer must not be called when there is a reply serializer')
-        return 'fail'
       }
     }
   }, function (req, reply) {
@@ -895,7 +840,7 @@ test('Reply serializer win over serializer ', (t, testDone) => {
 })
 
 test('Reply serializer win over serializer ', (t, testDone) => {
-  t.plan(6)
+  t.plan(4)
 
   const fastify = Fastify()
   fastify.setReplySerializer(function (payload, statusCode) {
@@ -913,13 +858,6 @@ test('Reply serializer win over serializer ', (t, testDone) => {
             work: { type: 'string' }
           }
         }
-      }
-    },
-    serializerCompiler: ({ schema, method, url, httpPart }) => {
-      t.assert.ok(method, 'the custom compiler has been created')
-      return () => {
-        t.assert.fail('the serializer must not be called when there is a reply serializer')
-        return 'fail'
       }
     }
   }, function (req, reply) {
@@ -1250,7 +1188,9 @@ test('do not crash if status code serializer errors', async t => {
   t.assert.deepStrictEqual(res.json(), {
     statusCode: 500,
     code: 'FST_ERR_FAILED_ERROR_SERIALIZATION',
-    message: 'Failed to serialize an error. Error: "customCode" is required!. ' +
+    // The error body does not satisfy the error schema of the route: the
+    // error path does not recurse, it answers the serialization failure.
+    message: 'Failed to serialize an error. Error: the error body does not match the error schema: must have required property \'customCode\'. ' +
       'Original error: querystring must have required property \'foo\''
   })
 })
@@ -1282,44 +1222,53 @@ test('custom schema serializer error, empty message', async t => {
   t.assert.deepStrictEqual(res.json(), { message: '' })
 })
 
-test('error in custom schema serialize compiler, throw FST_ERR_SCH_SERIALIZATION_BUILD error', (t, testDone) => {
+test('the route level serializer compiler is rejected at registration', (t, testDone) => {
   t.plan(3)
 
   const fastify = Fastify()
 
-  fastify.get('/', {
-    schema: {
-      response: {
-        '2xx': {
-          type: 'object',
-          properties: {
-            some: { type: 'string' }
-          }
-        },
-        500: {
-          type: 'object',
-          properties: {
-            message: { type: 'string' }
+  // The serializer compiler is gone with `fast-json-stringify`: the route
+  // that declares it is rejected at registration, it is never ignored.
+  t.assert.throws(
+    () => fastify.get('/', {
+      schema: {
+        response: {
+          '2xx': {
+            type: 'object',
+            properties: {
+              some: { type: 'string' }
+            }
+          },
+          500: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' }
+            }
           }
         }
+      },
+      serializerCompiler: () => {
+        throw new Error('CUSTOM_ERROR')
       }
-    },
-    serializerCompiler: () => {
-      throw new Error('CUSTOM_ERROR')
-    }
-  }, function (req, reply) {
-    reply.code(200).send({ some: 'thing' })
-  })
+    }, function (req, reply) {
+      reply.code(200).send({ some: 'thing' })
+    }),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
 
   fastify.ready((err) => {
-    t.assert.strictEqual(err.message, 'Failed building the serialization schema for GET: /, due to error CUSTOM_ERROR')
-    t.assert.strictEqual(err.statusCode, 500)
-    t.assert.strictEqual(err.code, 'FST_ERR_SCH_SERIALIZATION_BUILD')
+    t.assert.ifError(err)
+    // The accessor does not expose a serializer compiler that does not
+    // exist: it fails explicitly.
+    t.assert.throws(
+      () => fastify.serializerCompiler,
+      { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+    )
     testDone()
   })
 })
 
-test('Errors in serializer send to errorHandler', async t => {
+test('Errors in the output validation send to errorHandler', async t => {
   let savedError
 
   const fastify = Fastify()
@@ -1335,12 +1284,12 @@ test('Errors in serializer send to errorHandler', async t => {
           required: ['name']
         }
       }
-    },
-    // The serializer throws: the output validation passes, so the error of
-    // the serialization reaches the error handler.
-    serializerCompiler: () => () => { throw new Error('serialize error') }
+    }
   }, function (req, reply) {
-    reply.code(200).send({ name: 'thing' })
+    // The payload does not satisfy the response schema: the output
+    // validation fails and the error of the validation reaches the error
+    // handler.
+    reply.code(200).send({ power: 'thing' })
   })
   fastify.setErrorHandler((error, request, reply) => {
     savedError = error
@@ -1351,14 +1300,14 @@ test('Errors in serializer send to errorHandler', async t => {
 
   t.assert.strictEqual(res.statusCode, 500)
 
-  // t.assert.deepStrictEqual(savedError, new Error('"name" is required!'));
   t.assert.deepStrictEqual(res.json(), {
     statusCode: 500,
+    code: 'FST_ERR_OUTPUT_VALIDATION',
     error: 'Internal Server Error',
-    message: 'serialize error'
+    message: 'Response validation failed. Errors: must have required property \'name\''
   })
   t.assert.ok(savedError, 'error presents')
-  t.assert.ok(savedError.serialization, 'Serialization sign presents')
+  t.assert.ok(savedError.validation, 'the validation errors are presents')
 })
 
 test('capital X', (t, testDone) => {

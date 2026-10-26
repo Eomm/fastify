@@ -272,10 +272,11 @@ test('the output pool never injects a schema default into the response', async (
   // over to the `preSerialization` hooks does not carry the default.
   t.assert.deepStrictEqual(payloadSeenByTheHook, { hello: 'world' })
   t.assert.ok(!('count' in payloadSeenByTheHook), 'the default has not been injected')
-  // `fast-json-stringify` is still the serializer of this phase and it adds
-  // the default to the wire: the rule becomes observable on the bytes when
-  // the serializer is dropped.
-  t.assert.strictEqual(result.payload, '{"hello":"world","count":42}')
+  // `fast-json-stringify` added the default to the wire: the serializer is
+  // gone, so the default never reaches the wire. The divergence from the v5
+  // behaviour is intentional and it is documented in the V5 to V6 migration
+  // guide.
+  t.assert.strictEqual(result.payload, '{"hello":"world"}')
 })
 
 test('the output pool strips the properties that the response schema does not declare', async (t) => {
@@ -299,6 +300,72 @@ test('the output pool strips the properties that the response schema does not de
   t.assert.strictEqual(result.statusCode, 200)
   t.assert.strictEqual(result.payload, '{"hello":"world"}')
   t.assert.ok(!result.payload.includes('stripped'), 'the undeclared property is gone')
+})
+
+test('a property-less object schema answers an empty object (the first parity rule)', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: { type: 'object' }
+      }
+    }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  // `fast-json-stringify` emitted `{}` for a property-less object schema: the
+  // parity keeps that behaviour.
+  t.assert.strictEqual(result.payload, '{}')
+})
+
+test('an object schema with additionalProperties true keeps every property (the second parity rule)', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          additionalProperties: true
+        }
+      }
+    }
+  }, async () => ({ hello: 'world' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  // `fast-json-stringify` kept every property of an object schema that
+  // declares `additionalProperties: true`: the parity keeps that behaviour.
+  t.assert.strictEqual(result.payload, '{"hello":"world"}')
+})
+
+test('the properties are emitted in the order of the payload, not in the order of the schema', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            b: { type: 'string' },
+            a: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, async () => ({ a: 'world', b: 'moon' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  // The order of the bytes follows the payload: `fast-json-stringify` used
+  // the order of the schema.
+  t.assert.strictEqual(result.payload, '{"a":"world","b":"moon"}')
 })
 
 test('a route without a response schema is not validated', async (t) => {
@@ -472,11 +539,11 @@ test('a null payload is not validated', async (t) => {
   })
 
   const result = await fastify.inject('/')
-  // The behaviour of the null payload is the one of `fast-json-stringify`
-  // today: it is not validated, so the payload keeps the body that the
-  // serializer produces for it.
+  // The null payload is not validated: it is the carve-out of the output
+  // side. The body is the one of the native `JSON.stringify`, which emits
+  // `null` where `fast-json-stringify` emitted `{}`.
   t.assert.strictEqual(result.statusCode, 200)
-  t.assert.strictEqual(result.payload, '{}')
+  t.assert.strictEqual(result.payload, 'null')
   t.assert.strictEqual(validated, 0, 'the validator has never been invoked')
 })
 
@@ -930,15 +997,14 @@ test('a response schema that the output pool cannot compile stops the registrati
   const fastify = Fastify()
   t.after(() => fastify.close())
 
+  // The output pool compiles the response schemas itself: a schema that it
+  // cannot compile stops the registration.
   fastify.get('/', {
     schema: {
       response: {
         200: { type: 'invalid-type' }
       }
-    },
-    // The serializer of the route is provided by the user: the response
-    // schema is compiled by the output pool only.
-    serializerCompiler: () => () => JSON.stringify({ hello: 'world' })
+    }
   }, async () => ({ hello: 'world' }))
 
   await t.assert.rejects(fastify.ready(), (err) => {
@@ -946,6 +1012,38 @@ test('a response schema that the output pool cannot compile stops the registrati
     t.assert.ok(err.message.includes('Failed building the serialization schema'), 'the error carries the reason of the failure')
     return true
   })
+})
+
+test('the route level serializerCompiler option is rejected at registration', async t => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  // The serializer of the route is gone with `fast-json-stringify`: the
+  // option is rejected at registration, the response schema is never
+  // compiled by a user provided serializer.
+  t.assert.throws(
+    () => fastify.get('/', {
+      schema: {
+        response: {
+          200: { type: 'invalid-type' }
+        }
+      },
+      serializerCompiler: () => () => JSON.stringify({ hello: 'world' })
+    }, async () => ({ hello: 'world' })),
+    { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
+
+  t.assert.throws(
+    () => fastify.get('/', {
+      schema: {
+        response: {
+          200: { type: 'invalid-type' }
+        }
+      },
+      serializerCompiler: () => () => JSON.stringify({ hello: 'world' })
+    }, async () => ({ hello: 'world' })),
+    { message: /serializerCompiler/ }
+  )
 })
 
 test('a route without a response schema produces no output validator', t => {
@@ -1226,10 +1324,10 @@ test('a user supplied buildOutputValidator replaces the default output factory',
 
   const wrongType = await fetch(fastifyServer + '/wrong-type')
   t.assert.strictEqual(wrongType.status, 200, 'the validator of the user accepts the payload')
-  // The bytes on the wire are still produced by `fast-json-stringify`: the
-  // serializer of the framework shapes the payload, the validator of the user
-  // decides whether the payload is accepted.
-  t.assert.deepStrictEqual(JSON.parse(await wrongType.text()), { hello: '42' })
+  // The bytes on the wire are produced by the native `JSON.stringify`: the
+  // payload is not shaped any more, the validator of the user only decides
+  // whether the payload is accepted. The value is not coerced.
+  t.assert.deepStrictEqual(JSON.parse(await wrongType.text()), { hello: 42 })
 
   const content = await fetch(fastifyServer + '/content')
   t.assert.strictEqual(content.status, 200)

@@ -78,16 +78,17 @@ test('validate passes null for an undefined request part and preserves other val
 
 test('Symbols', t => {
   t.plan(6)
-  t.assert.strictEqual(typeof symbols.responseSchema, 'symbol')
   t.assert.strictEqual(typeof symbols.bodySchema, 'symbol')
   t.assert.strictEqual(typeof symbols.querystringSchema, 'symbol')
   t.assert.strictEqual(typeof symbols.paramsSchema, 'symbol')
   t.assert.strictEqual(typeof symbols.headersSchema, 'symbol')
   t.assert.strictEqual(typeof symbols.outputValidatorSchema, 'symbol')
+  // The `responseSchema` symbol is gone with `fast-json-stringify`: the
+  // response schemas are compiled by the output pool, not by a serializer.
+  t.assert.strictEqual(symbols.responseSchema, undefined)
 })
 
 ;['compileSchemasForValidation',
-  'compileSchemasForSerialization',
   'compileSchemasForResponseValidation'].forEach(func => {
   test(`${func} schema - missing schema`, t => {
     t.plan(3)
@@ -208,31 +209,6 @@ test('build schema - output validator schema with an invalid status code', t => 
     () => validation.compileSchemasForResponseValidation(context, () => () => true),
     { code: 'FST_ERR_SCH_RESPONSE_SCHEMA_NOT_NESTED_2XX' }
   )
-})
-
-test('build schema - output schema', t => {
-  t.plan(2)
-  const opts = {
-    schema: {
-      response: {
-        '2xx': {
-          type: 'object',
-          properties: {
-            hello: { type: 'string' }
-          }
-        },
-        201: {
-          type: 'object',
-          properties: {
-            hello: { type: 'number' }
-          }
-        }
-      }
-    }
-  }
-  validation.compileSchemasForSerialization(opts, ({ schema, method, url, httpPart }) => ajv.compile(schema))
-  t.assert.strictEqual(typeof opts[symbols.responseSchema]['2xx'], 'function')
-  t.assert.strictEqual(typeof opts[symbols.responseSchema]['201'], 'function')
 })
 
 test('build schema - body schema', t => {

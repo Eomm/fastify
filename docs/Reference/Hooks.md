@@ -192,10 +192,11 @@ invalid field past the validation.
 > request.
 
 > ℹ️ Note:
-> The hook is NOT called if the payload is a `string`, a `Buffer`, an
-> `ArrayBuffer`, a `stream` or a `Response`: those payloads never reach the
-> response pipeline. A `null` payload does reach the hook, but it is never
-> validated.
+> The hook is NOT called if the payload is a `Buffer`, an `ArrayBuffer`, a
+> `stream` or a `Response`: those payloads never reach the response pipeline.
+> A `string` payload does not reach the hook either, but it **is** validated
+> against `schema.response`. A `null` payload does reach the hook, but it is
+> never validated.
 
 ### preSerialization
 

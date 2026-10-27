@@ -50,6 +50,10 @@ the `preResponseValidation` hook and the `preSerialization` hook. A reply that
 is handled by a custom reply serializer skips that validation step: the custom
 serializer owns the wire format.
 
+A `string` payload is validated too, but it is neither shaped nor serialized:
+it reaches the wire as the handler produced it, and a string that violates the
+response schema answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error.
+
 When [`handlerTimeout`](./Server.md#factory-handler-timeout) is configured, a
 timer starts after routing. If the response is not sent within the allowed time,
 `request.signal` is aborted and a `503 Service Unavailable` error is sent.

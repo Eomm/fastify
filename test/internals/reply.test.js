@@ -208,10 +208,9 @@ test('reply.serialize should serialize payload with Fastify instance', (t, done)
     schema: {
       response: {
         200: {
-          type: 'object',
-          properties: {
-            foo: { type: 'string' }
-          }
+          // The payload of the route is the *string* `reply.serialize()`
+          // produced, so the response schema describes a string.
+          type: 'string'
         }
       }
     },

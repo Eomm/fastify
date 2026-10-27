@@ -865,6 +865,11 @@ The order of the response pipeline is: the handler, the
 validation, the [`preSerialization`](./Hooks.md#preserialization) hook, the
 serialization and the [`onSend`](./Hooks.md#onsend) hook.
 
+A `string` payload is validated as well, but it is neither shaped nor
+serialized: it reaches the wire exactly as the handler produced it, and a
+string that violates the response schema answers HTTP 500 with the
+`FST_ERR_OUTPUT_VALIDATION` error and the Ajv `validation` array.
+
 The output side is configured by the
 [`schemaController.outputValidatorOptions`](./Server.md#schema-controller) and
 the `schemaController.compilersFactory.buildOutputValidator` members.

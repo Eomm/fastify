@@ -830,6 +830,76 @@ test('an async response schema that the payload violates fails the response with
   t.assert.strictEqual(capturedError.validationContext, 'response')
 })
 
+test('a string payload is validated against the response schema', async (t) => {
+  let capturedError = null
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          required: ['hello'],
+          properties: { hello: { type: 'string' } }
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.send('not an object at all')
+  })
+
+  // A string payload is not shaped, but it is validated: a route that
+  // declares `schema.response` never answers an unvalidated payload.
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.ok(capturedError, 'the error hook received the error')
+  t.assert.strictEqual(capturedError.validation.length, 1)
+  t.assert.strictEqual(capturedError.validation[0].keyword, 'type')
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+})
+
+test('a string payload that satisfies the response schema reaches the wire as it is', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'string' } } }
+  }, async (req, reply) => {
+    reply.send('hello world')
+  })
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  // The string payload is not serialized: it reaches the wire as the handler
+  // produced it.
+  t.assert.strictEqual(result.payload, 'hello world')
+  t.assert.strictEqual(result.headers['content-type'], 'text/plain; charset=utf-8')
+})
+
+test('a string payload with a json content type is validated and sent as it is', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: { response: { 200: { type: 'string' } } }
+  }, async (req, reply) => {
+    reply.type('application/json').send('hello world')
+  })
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.strictEqual(result.payload, 'hello world')
+  t.assert.strictEqual(result.headers['content-type'], 'application/json; charset=utf-8')
+})
+
 test('the output validation awaits a validator that returns a promise', async (t) => {
   let resolved = false
   const fastify = Fastify({

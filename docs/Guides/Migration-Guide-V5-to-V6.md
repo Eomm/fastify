@@ -150,13 +150,20 @@ so the semantics of the native `JSON.stringify()` apply:
 **Old:** in Fastify v5 the fjs serializer removed the properties that the
 response schema did not declare.
 
-**New:** the output pool does the same (`removeAdditional: 'all'`), and it does
-it recursively: the nested objects, and the objects inside the arrays, are
-stripped as well. A schema that declares `additionalProperties: true` keeps
-the properties it allows, and a schema that declares `patternProperties` keeps
-the properties that match one of its patterns.
+**New:** the output pool does the same, and it does it recursively: the nested
+objects, and the objects inside the arrays, are stripped as well. The pool is
+configured with `removeAdditional: true`, and the parity layer of the framework
+declares `additionalProperties: false` exactly where the v5 serializer dropped
+the extra properties: an object schema that declares no `additionalProperties`
+drops the properties that it does not declare.
 
-**Action:** none.
+A schema that declares `additionalProperties: true` (or an
+`additionalProperties` schema) is the exception: it **keeps** the properties
+that it allows, and they reach the client. A schema that declares
+`patternProperties` keeps the properties that match one of its patterns.
+
+**Action:** check the response schemas that declare `additionalProperties`:
+the properties that they allow are sent to the client.
 
 #### A property-less object schema answers `{}`
 

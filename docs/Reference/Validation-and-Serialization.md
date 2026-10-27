@@ -587,7 +587,11 @@ const fastify = require('fastify')({
   schemaController: {
     outputValidatorOptions: {
       customOptions: {
-        removeAdditional: 'all'
+        // The output pool is strict by default: `removeAdditional: true`
+        // strips the properties that the schema does not declare. The value
+        // `'all'` must not be used: it removes every additional property,
+        // even the ones that an `additionalProperties: <schema>` allows.
+        removeAdditional: true
       },
       plugins: [
         require('ajv-merge-patch')
@@ -612,9 +616,9 @@ as it is. The defaults are:
 
 ```js
 {
-  useDefaults: false,      // never inject a default into a response
-  coerceTypes: false,      // never coerce the type of a response value
-  removeAdditional: 'all', // strip the properties that the schema does not declare
+  useDefaults: false,    // never inject a default into a response
+  coerceTypes: false,    // never coerce the type of a response value
+  removeAdditional: true, // strip the properties that the schema does not declare
   allErrors: false
 }
 ```
@@ -628,6 +632,24 @@ The three strict defaults are the observable difference from the v5 behaviour:
 * **the extra properties are stripped**: the properties that the response
   schema does not declare are removed from the payload, exactly as the v5
   serializer did.
+
+The `removeAdditional: true` option removes a property only where the schema
+declares `additionalProperties: false`. The **parity layer** of the framework
+(`lib/output-schema-parity.js`) declares it exactly where the v5 serializer
+dropped the extra properties, so the two options work together:
+
+* an object schema that declares **no** `additionalProperties` drops the
+  properties that it does not declare — the v5 behaviour;
+* an object schema that declares `additionalProperties: true` **keeps** the
+  extra properties: they reach the client. A schema that declares an
+  `additionalProperties` schema keeps them too, and validates them;
+* the members of a composition (`allOf`, `anyOf`, `oneOf`, `if`/`then`/`else`)
+  are merged, exactly like the v5 serializer merged them.
+
+The value `'all'` must not be used on the output side: it removes every
+additional property, even the ones that an `additionalProperties: <schema>`
+allows, and it removes the properties of the members of a composition inside
+every member.
 
 Every default can be overridden through the
 `schemaController.outputValidatorOptions.customOptions` option, or through the
@@ -1001,7 +1023,9 @@ The response body is produced in two steps:
 
 1. the **output validation**: the Ajv validator of the output side validates
    the payload against the response schema of the route and shapes it — the
-   properties that the schema does not declare are removed from the payload;
+   properties that the schema does not declare are removed from the payload,
+   unless the schema declares `additionalProperties: true` (or an
+   `additionalProperties` schema), which keeps them;
 2. the **native `JSON.stringify()`**: the shaped payload is serialized.
 
 The order of the response pipeline is: the handler, the

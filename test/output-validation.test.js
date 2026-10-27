@@ -780,6 +780,56 @@ test('an async response schema is awaited and its rejection fails the response',
   t.assert.strictEqual(capturedError.validationContext, 'response')
 })
 
+test('an async response schema accepts the payload whose validated value is false', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  const schema = {
+    $async: true,
+    type: 'boolean'
+  }
+
+  fastify.get('/false', { schema: { response: { 200: schema } } }, async () => false)
+  fastify.get('/true', { schema: { response: { 200: schema } } }, async () => true)
+
+  // An Ajv `$async` validator resolves with the validated data: the resolved
+  // value is not a verdict. The boolean `false` is a valid payload.
+  const falsy = await fastify.inject('/false')
+  t.assert.strictEqual(falsy.statusCode, 200)
+  t.assert.strictEqual(falsy.payload, 'false')
+
+  const truthy = await fastify.inject('/true')
+  t.assert.strictEqual(truthy.statusCode, 200)
+  t.assert.strictEqual(truthy.payload, 'true')
+})
+
+test('an async response schema that the payload violates fails the response with the Ajv errors', async (t) => {
+  let capturedError = null
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  const schema = {
+    $async: true,
+    type: 'boolean'
+  }
+
+  fastify.get('/', { schema: { response: { 200: schema } } }, async () => 42)
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 500)
+  const body = JSON.parse(result.payload)
+  t.assert.strictEqual(body.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.ok(capturedError, 'the error hook received the error')
+  t.assert.strictEqual(capturedError.validation.length, 1)
+  t.assert.strictEqual(capturedError.validation[0].keyword, 'type')
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+})
+
 test('the output validation awaits a validator that returns a promise', async (t) => {
   let resolved = false
   const fastify = Fastify({

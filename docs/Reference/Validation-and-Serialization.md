@@ -869,6 +869,20 @@ The output side is configured by the
 [`schemaController.outputValidatorOptions`](./Server.md#schema-controller) and
 the `schemaController.compilersFactory.buildOutputValidator` members.
 
+#### The asynchronous output validator
+
+An output validator may be asynchronous. The two asynchronous contracts are not
+the same, and the framework tells them apart:
+
+- an **Ajv `$async` validator** resolves with the *validated data* and rejects
+  when the validation fails. The resolved value is never a verdict: a payload
+  whose validated value is the boolean `false` is a valid payload, and the
+  payload that reaches the wire is the one the validator resolved with;
+- a **custom validator**, built by the
+  `schemaController.compilersFactory.buildOutputValidator` factory, follows the
+  contract of that factory: it rejects the payload by throwing an error (or by
+  rejecting the promise it returns) and it resolves `false` to reject it.
+
 #### The differences from the v5 behaviour
 
 The schema still does the shaping, but the serialization itself is the native

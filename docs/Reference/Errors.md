@@ -65,6 +65,7 @@
     - [FST_ERR_MISSING_SERIALIZATION_FN](#fst_err_missing_serialization_fn)
     - [FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN](#fst_err_missing_contenttype_serialization_fn)
     - [FST_ERR_OUTPUT_VALIDATION](#fst_err_output_validation)
+    - [FST_ERR_BUILD_VALIDATOR_RENAMED](#fst_err_build_validator_renamed)
     - [FST_ERR_SERIALIZER_COMPILER_REMOVED](#fst_err_serializer_compiler_removed)
     - [FST_ERR_SERIALIZER_OPTS_REMOVED](#fst_err_serializer_opts_removed)
     - [FST_ERR_REQ_INVALID_VALIDATION_INVOCATION](#fst_err_req_invalid_validation_invocation)
@@ -434,6 +435,7 @@ Below is a table with all the error codes used by Fastify.
 | <a id="fst_err_missing_serialization_fn">FST_ERR_MISSING_SERIALIZATION_FN</a> | Missing serialization function. | Add a serialization function. | [#3970](https://github.com/fastify/fastify/pull/3970) |
 | <a id="fst_err_missing_contenttype_serialization_fn">FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN</a> | Missing `Content-Type` serialization function. | Add a serialization function. | [#4264](https://github.com/fastify/fastify/pull/4264) |
 | <a id="fst_err_output_validation">FST_ERR_OUTPUT_VALIDATION</a> | The response payload did not satisfy the `schema.response` of the route. The error carries the Ajv `validation` errors array and `validationContext: 'response'`. | Fix the payload returned by the handler, or the response schema of the route. | - |
+| <a id="fst_err_build_validator_renamed">FST_ERR_BUILD_VALIDATOR_RENAMED</a> | The `compilersFactory.buildValidator` key has been renamed in Fastify v6: the key of the input validator factory is now `compilersFactory.buildInputValidator`. | Rename the key to `compilersFactory.buildInputValidator` and follow the V5 to V6 migration guide. | - |
 | <a id="fst_err_serializer_compiler_removed">FST_ERR_SERIALIZER_COMPILER_REMOVED</a> | The serializer compiler has been removed in Fastify v6: `fastify.setSerializerCompiler()`, the route level `serializerCompiler` option and `compilersFactory.buildSerializer` are not supported any more. | Remove the serializer compiler and follow the V5 to V6 migration guide. | - |
 | <a id="fst_err_serializer_opts_removed">FST_ERR_SERIALIZER_OPTS_REMOVED</a> | The `serializerOpts` server option has been removed in Fastify v6. | Remove the option and follow the V5 to V6 migration guide. | - |
 | <a id="fst_err_req_invalid_validation_invocation">FST_ERR_REQ_INVALID_VALIDATION_INVOCATION</a> | Invalid validation invocation. Missing validation function for HTTP part nor schema provided. | Add a validation function. | [#3970](https://github.com/fastify/fastify/pull/3970) |

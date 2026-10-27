@@ -1825,12 +1825,13 @@ const fastify = Fastify({
        * It may receive as input the schemas of the parent context if some schemas have been added.
        * @param {object} externalSchemas these schemas will be returned by the
        * `bucket.getSchemas()`. Needed to resolve the external references $ref.
-       * @param {object} ajvServerOption the server `ajv` options to build your compilers accordingly
+       * @param {object} inputValidatorOptions the options of the input validator
+       * (the server `ajv` options) to build your compilers accordingly
        */
-      buildValidator: function factory (externalSchemas, ajvServerOption) {
+      buildInputValidator: function factory (externalSchemas, inputValidatorOptions) {
         // This factory function must return a schema validator compiler.
         // See [#schema-validator](./Validation-and-Serialization.md#schema-validator) for details.
-        const yourAjvInstance = new Ajv(ajvServerOption.customOptions)
+        const yourAjvInstance = new Ajv(inputValidatorOptions.customOptions)
         return function validatorCompiler ({ schema, method, url, httpPart }) {
           return yourAjvInstance.compile(schema)
         }
@@ -1863,6 +1864,13 @@ const fastify = Fastify({
 > [`@fastify/ajv-compiler`](https://github.com/fastify/ajv-compiler) package is
 > not supported by `schemaController.outputValidatorOptions`, and the type does
 > not advertise it.
+
+> ℹ️ Note:
+> The `compilersFactory.buildValidator` key has been renamed to
+> `compilersFactory.buildInputValidator` in Fastify v6. The old key is a hard
+> error: a server that configures it throws the
+> `FST_ERR_BUILD_VALIDATOR_RENAMED` error at startup, it is never a silent
+> fallback. See the V5 to V6 migration guide for the details.
 
 #### setNotFoundHandler
 <a id="set-not-found-handler"></a>

@@ -282,6 +282,18 @@ const PARITY_MATRIX = [
     fjs: '{"a":"x","b":2}'
   },
   {
+    name: 'a schema that declares only propertyNames keeps every property',
+    schema: { propertyNames: { pattern: '^a' } },
+    payload: { a: 1 },
+    fjs: '{"a":1}'
+  },
+  {
+    name: 'a schema that declares only dependencies answers an empty object',
+    schema: { dependencies: { b: ['a'] } },
+    payload: { a: 1, b: 2 },
+    fjs: '{}'
+  },
+  {
     name: 'a nullable object schema answers an empty object',
     schema: { type: ['object', 'null'] },
     payload: { id: 1, extra: 'kept?' },
@@ -294,6 +306,22 @@ const PARITY_MATRIX = [
     fjs: '{}'
   }
 ]
+
+/**
+ * Copies a value, deeply.
+ *
+ * `fast-json-stringify` **mutates** the schema it receives: it writes the
+ * type it infers into it (`schema.type = 'object'` for a schema that carries
+ * an object keyword only). The reference of a case must therefore be built
+ * from a copy of the schema, or the v6 build would compile the mutated
+ * schema and the harness would compare a schema it has changed itself.
+ *
+ * @param {*} value the value
+ * @returns {*} the copy
+ */
+function deepCopy (value) {
+  return JSON.parse(JSON.stringify(value))
+}
 
 /**
  * Serializes a value with a canonical (sorted) key order, so that two bodies
@@ -420,13 +448,16 @@ function assertOutputValidationError (condition) {
 
 test('the wire bytes are the bytes of fast-json-stringify', async (t) => {
   for (const entry of PARITY_MATRIX) {
-    const externalSchemas = entry.externalSchemas || []
+    // The reference is built from a copy of the schema: `fast-json-stringify`
+    // mutates the schema it receives, and the v6 build must compile the
+    // schema of the case, not the mutated one.
+    const externalSchemas = (entry.externalSchemas || []).map(document => deepCopy(document))
     const reference = externalSchemas.length > 0
       ? build(
-        entry.schema,
+        deepCopy(entry.schema),
         { schema: Object.fromEntries(externalSchemas.map(document => [document.$id, document])) }
       )(entry.payload)
-      : build(entry.schema)(entry.payload)
+      : build(deepCopy(entry.schema))(entry.payload)
     t.assert.strictEqual(reference, entry.fjs, `the fjs reference of "${entry.name}"`)
 
     const fastify = Fastify()

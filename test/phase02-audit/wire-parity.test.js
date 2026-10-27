@@ -1703,6 +1703,78 @@ test('a composition whose member references a local definition that carries a po
   t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
 })
 
+test('a composition whose member references a local definition that carries a pointer and no identifier is built', async (t) => {
+  // The pointer of the copy of the local definition resolves against the
+  // scope of the document that holds the definition: the copy lives in that
+  // scope, and the pointer points at the same subschema as in the original.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $defs: {
+            inner: { type: 'string' },
+            base: {
+              type: 'object',
+              properties: { a: { $ref: '#/$defs/inner' } }
+            }
+          },
+          allOf: [
+            { $ref: '#/$defs/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member references a local definition that carries a nested scope resolves its relative references against the scope', async (t) => {
+  // The relative reference of the copy of the local definition must be
+  // resolved against the scope the definition opens, and not against the
+  // scope of the document that holds the composition: the copy would
+  // otherwise resolve another document than the original definition, and the
+  // route would not build at all.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({ $id: 'http://fastify.test/dir/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $id: 'http://fastify.test/root',
+          $defs: {
+            base: {
+              $id: 'dir/base',
+              type: 'object',
+              properties: {
+                nested: {
+                  $id: 'sub',
+                  type: 'object',
+                  properties: { x: { $ref: 'other' } }
+                }
+              }
+            }
+          },
+          allOf: [{ $ref: '#/$defs/base' }]
+        }
+      }
+    }
+  }, async () => ({ nested: { x: 's' } }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":{"x":"s"}}')
+})
+
 test('a composition whose member carries a reference and a sibling container is built', async (t) => {
   // The copy of the referenced schema replaces the member of the composition
   // and it lives in the scope of the document: the entries of a sibling

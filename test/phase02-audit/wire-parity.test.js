@@ -1583,6 +1583,70 @@ test('a composition whose member references a shared document that carries a dot
   t.assert.strictEqual(response.payload, '{"nested":{"deep":"s"},"b":2}')
 })
 
+test('a composition whose member references a shared document that carries an explicit default port is built', async (t) => {
+  // The URL parser of Node drops the default port of a scheme: the relative
+  // reference of the copy of the shared document must keep the port of its
+  // base, exactly like the validator resolves it (`uri-js` keeps the port),
+  // or the copy references another document than the original.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test:80/base',
+    type: 'object',
+    properties: { nested: { $ref: 'other' } }
+  })
+  fastify.addSchema({ $id: 'http://fastify.test:80/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'http://fastify.test:80/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ nested: 's', b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":"s","b":2}')
+})
+
+test('a composition whose member references a shared document that carries an explicit port is built', async (t) => {
+  // The port of a base that is not the default port of its scheme is kept
+  // by the URL parser of Node: the resolved identifier must keep it too.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test:8080/base',
+    type: 'object',
+    properties: { nested: { $ref: 'other' } }
+  })
+  fastify.addSchema({ $id: 'http://fastify.test:8080/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'http://fastify.test:8080/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ nested: 's', b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":"s","b":2}')
+})
+
 test('a composition whose member carries its own identifier keeps the properties of every member', async (t) => {
   // The member that carries its own identifier is not published through
   // `fastify.addSchema()`: it must not remove the properties that the other

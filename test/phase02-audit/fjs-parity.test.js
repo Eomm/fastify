@@ -271,6 +271,17 @@ const PARITY_MATRIX = [
     fjs: '{"a":"x","b":2}'
   },
   {
+    name: 'a composition whose member carries its own identifier keeps the properties of every member',
+    schema: {
+      allOf: [
+        { $id: 'sub', type: 'object', properties: { a: { type: 'string' } } },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
     name: 'a nullable object schema answers an empty object',
     schema: { type: ['object', 'null'] },
     payload: { id: 1, extra: 'kept?' },
@@ -513,18 +524,20 @@ test('the transform merges the members of a composition', async (t) => {
     'a boolean member is left alone'
   )
 
-  // A shared document is transformed as a standalone document: the copy that
-  // is embedded in a schema and the copy of the output pool must be equal.
+  // A shared document that is embedded in the composition and that is not
+  // published through `fastify.addSchema()` is neutralized like every other
+  // member: it must not remove the properties that the other members
+  // declare.
   t.assert.deepStrictEqual(
     applyFjsObjectParity({
       allOf: [{ $id: 'shared', type: 'object', properties: { a: { type: 'string' } } }]
     }),
     {
-      allOf: [{ $id: 'shared', type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false }],
+      allOf: [{ $id: 'shared', type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true }],
       properties: { a: true },
       additionalProperties: false
     },
-    'a shared document is not neutralized'
+    'an embedded shared document does not remove the properties of the other members'
   )
 
   // A shared document that only takes part in the validation of the payload

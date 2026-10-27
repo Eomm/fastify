@@ -570,6 +570,33 @@ test('the transform resolves the member of a composition that references another
     'a circular reference is not resolved'
   )
 
+  // A member that carries the identifier of a shared document that could
+  // not be resolved is left alone: its copy in the pool of the output side
+  // must stay equal to this copy, or the validator refuses the schema.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      {
+        allOf: [
+          { $id: 'sub', $ref: 'nowhere' },
+          { type: 'object', properties: { b: { type: 'number' } } }
+        ]
+      },
+      {
+        sharedDocuments: {
+          sub: { $id: 'sub', type: 'object', properties: { a: { type: 'string' } } }
+        }
+      }
+    ),
+    {
+      allOf: [
+        { $id: 'sub', $ref: 'nowhere' },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { b: true }
+    },
+    'a shared document that could not be resolved is left alone'
+  )
+
   // The `then` branch of an `if`/`then` composition is replaced too.
   t.assert.deepStrictEqual(
     applyFjsObjectParity({
@@ -718,6 +745,31 @@ test('a composition whose member references a shared document that references an
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"nested":"s","b":2}')
+})
+
+test('a composition whose member carries its own identifier keeps the properties of every member', async (t) => {
+  // The member that carries its own identifier is not published through
+  // `fastify.addSchema()`: it must not remove the properties that the other
+  // members declare, or the body is a subset of the fjs body.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $id: 'sub', type: 'object', properties: { a: { type: 'string' } } },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
 })
 
 test('a nullable object schema answers an empty object', async (t) => {

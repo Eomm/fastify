@@ -1952,11 +1952,16 @@ const fastify = Fastify({
        * It may receive as input the schemas of the parent context if some schemas have been added.
        * @param {object} externalSchemas these schemas will be returned by the
        * `bucket.getSchemas()`. Needed to resolve the external references $ref.
-       * @param {object} outputValidatorOptions the `schemaController.outputValidatorOptions` options
+       * @param {object|undefined} outputValidatorOptions the
+       * `schemaController.outputValidatorOptions` options. They are `undefined`
+       * when the server does not configure them.
        */
       buildOutputValidator: function factory (externalSchemas, outputValidatorOptions) {
         // This factory function must return a schema validator compiler.
-        const yourAjvInstance = new Ajv(outputValidatorOptions.customOptions)
+        // The options are `undefined` when the server does not configure the
+        // `schemaController.outputValidatorOptions` option.
+        const options = outputValidatorOptions || {}
+        const yourAjvInstance = new Ajv(options.customOptions)
         return function validatorCompiler ({ schema, method, url, httpStatus, contentType }) {
           return yourAjvInstance.compile(schema)
         }

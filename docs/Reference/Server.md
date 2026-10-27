@@ -1857,6 +1857,13 @@ const fastify = Fastify({
 });
 ```
 
+> ℹ️ Note:
+> The output side validates *and* shapes the payload with the JSON Schema
+> semantics: the `mode: 'JTD'` of the
+> [`@fastify/ajv-compiler`](https://github.com/fastify/ajv-compiler) package is
+> not supported by `schemaController.outputValidatorOptions`, and the type does
+> not advertise it.
+
 #### setNotFoundHandler
 <a id="set-not-found-handler"></a>
 

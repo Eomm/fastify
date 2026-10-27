@@ -54,10 +54,11 @@ fastify.route(options)
   Defaults to the value of [`exposeHeadRoutes`](./Server.md#exposeHeadRoutes)
   instance option. If you want a custom `HEAD` handler without disabling this
   option, make sure to define it before the `GET` route.
-* `attachValidation`: attach `validationError` to request, if there is a schema
-  validation error, instead of sending the error to the error handler. The
-  default [error format](https://ajv.js.org/api.html#error-objects) is the Ajv
-  one.
+* `attachRequestValidation`: attach `validationError` to request, if there is a
+  schema validation error, instead of sending the error to the error handler.
+  The default [error format](https://ajv.js.org/api.html#error-objects) is the
+  Ajv one. The option was named `attachValidation` in v5: see the
+  [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md).
 * `onRequest(request, reply, done)`: a [function](./Hooks.md#onrequest) called
   as soon as a request is received, it could also be an array of functions.
 * `preParsing(request, reply, payload, done)`: a
@@ -835,4 +836,4 @@ silently ignored.
 
 See the [Validation and Serialization](./Validation-and-Serialization.md#removed-in-v6)
 documentation for the whole list of the removed serialization APIs and the
-V5 to V6 migration guide.
+[V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md).

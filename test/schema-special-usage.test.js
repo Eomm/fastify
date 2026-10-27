@@ -1361,7 +1361,7 @@ test('Check mixed sync and async AJV validations', async (t) => {
   }
 })
 
-test('Check if hooks and attachValidation work with AJV validations', async (t) => {
+test('Check if hooks and attachRequestValidation work with AJV validations', async (t) => {
   const fastify = Fastify({
     exposeHeadRoutes: false,
     schemaController: {
@@ -1410,7 +1410,7 @@ test('Check if hooks and attachValidation work with AJV validations', async (t) 
 
       reply.code(400).send(request.body)
     },
-    attachValidation: true,
+    attachRequestValidation: true,
     schema: {
       params: schemaAsync,
       body: schemaAsync,

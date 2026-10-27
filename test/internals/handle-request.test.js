@@ -63,7 +63,7 @@ test('handler function - invalid schema', t => {
     preHandler: [],
     onSend: [],
     onError: [],
-    attachValidation: false,
+    attachRequestValidation: false,
     schemaErrorFormatter: () => new Error()
   }
   buildSchema(context, schemaValidator)

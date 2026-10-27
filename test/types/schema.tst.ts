@@ -2,7 +2,7 @@ import { AjvCompiler, BuildCompilerFromPool, StandaloneValidator } from '@fastif
 import Ajv from 'ajv'
 import { expect } from 'tstyche'
 import fastify, { FastifyInstance, FastifySchema } from '../../fastify.js'
-import { SchemaErrorDataVar } from '../../types/schema.js'
+import { FastifyOutputValidatorOptions, SchemaErrorDataVar } from '../../types/schema.js'
 
 const server = fastify()
 
@@ -157,6 +157,20 @@ expect(server.setValidatorCompiler<FastifySchema & { validate: Record<string, un
     }
   })
 }
+
+// The `mode: 'JTD'` of the input side cannot work on the output side: the
+// output pool validates *and* shapes with the JSON Schema semantics, so the
+// type does not advertise the JTD mode.
+expect<FastifyOutputValidatorOptions>().type.not.toBeAssignableTo<{ mode: 'JTD' }>()
+
+fastify({
+  schemaController: {
+    outputValidatorOptions: {
+      // @ts-expect-error  Type 'string' is not assignable to type 'undefined'.
+      mode: 'JTD'
+    }
+  }
+})
 
 // The output validation context is part of the validation context union
 expect<'response'>().type.toBeAssignableTo<SchemaErrorDataVar>()

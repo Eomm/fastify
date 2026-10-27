@@ -594,4 +594,5 @@ const versionConstraintStrategy: ConstraintStrategy<FindMyWayVersion<RawServerDe
 expect(server.addConstraintStrategy(versionConstraintStrategy)).type.toBe<void>()
 expect(server.hasConstraintStrategy(versionConstraintStrategy.name)).type.toBe<boolean>()
 
-expect(server.validatorCompiler).type.toBe<FastifySchemaCompiler<any> | undefined>()
+expect(server.inputValidatorCompiler).type.toBe<FastifySchemaCompiler<any> | undefined>()
+expect(server.outputValidatorCompiler).type.toBe<FastifySchemaCompiler<any> | undefined>()

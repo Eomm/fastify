@@ -328,7 +328,7 @@ test('Encapsulation', (t, testDone) => {
     instance.register((instance, opts, done) => {
       instance.post('/two', {
         handler (req, reply) {
-          t.assert.deepStrictEqual(instance.validatorCompiler, validator)
+          t.assert.deepStrictEqual(instance.inputValidatorCompiler, validator)
           reply.send({ foo: 'two' })
         },
         schema: {
@@ -342,7 +342,7 @@ test('Encapsulation', (t, testDone) => {
       instance.post('/three', {
         validatorCompiler: anotherValidator,
         handler (req, reply) {
-          t.assert.deepStrictEqual(instance.validatorCompiler, validator, 'the route validator does not change the instance one')
+          t.assert.deepStrictEqual(instance.inputValidatorCompiler, validator, 'the route validator does not change the instance one')
           reply.send({ foo: 'three' })
         },
         schema: {
@@ -356,7 +356,7 @@ test('Encapsulation', (t, testDone) => {
 
   fastify.register((instance, opts, done) => {
     instance.post('/clean', function (req, reply) {
-      t.assert.strictEqual(instance.validatorCompiler, undefined)
+      t.assert.strictEqual(instance.inputValidatorCompiler, undefined)
       reply.send({ foo: 'bar' })
     })
     done()

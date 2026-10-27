@@ -11,6 +11,7 @@ import {
   preHandlerHookHandler,
   preParsingHookHandler,
   preSerializationHookHandler,
+  preResponseValidationHookHandler,
   preValidationHookHandler
 } from './hooks'
 import { FastifyInstance } from './instance'
@@ -99,6 +100,10 @@ export interface RouteShorthandOptions<
     NoInfer<SchemaCompiler>, TypeProvider, Logger>>
     | RouteShorthandHook<preHandlerHookHandler<RawServer, RawRequest, RawReply, RouteGeneric, ContextConfig,
     NoInfer<SchemaCompiler>, TypeProvider, Logger>>[];
+  preResponseValidation?: RouteShorthandHook<preResponseValidationHookHandler<unknown, RawServer, RawRequest, RawReply,
+    RouteGeneric, ContextConfig, NoInfer<SchemaCompiler>, TypeProvider, Logger>>
+    | RouteShorthandHook<preResponseValidationHookHandler<unknown, RawServer, RawRequest, RawReply, RouteGeneric,
+      ContextConfig, NoInfer<SchemaCompiler>, TypeProvider, Logger>>[];
   preSerialization?: RouteShorthandHook<preSerializationHookHandler<unknown, RawServer, RawRequest, RawReply,
     RouteGeneric, ContextConfig, NoInfer<SchemaCompiler>, TypeProvider, Logger>>
     | RouteShorthandHook<preSerializationHookHandler<unknown, RawServer, RawRequest, RawReply, RouteGeneric,

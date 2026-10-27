@@ -118,6 +118,24 @@ into the body when the payload did not carry the property.
 
 **Action:** build the complete payload in the handler.
 
+#### The response schemas are not linted
+
+**Old:** in Fastify v5 the `fast-json-stringify` serializer never linted the
+response schemas: a schema that carried an unknown or an annotation keyword
+(`example`, `discriminator`, ...) or that declared no `type` was serialized
+as it was.
+
+**New:** the output pool never lints the response schemas either
+(`strict: false`). The lint is a schema switch only: it does not weaken the
+other defaults of the output pool, and a payload that violates the schema
+still answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error.
+
+**Action:** none, but the lint can be turned back on through the custom
+options of the output pool
+(`schemaController.outputValidatorOptions.customOptions.strict`): a response
+schema that carries an unknown keyword then fails at boot with the
+`FST_ERR_SCH_SERIALIZATION_BUILD` error.
+
 #### The property order follows the payload
 
 **Old:** in Fastify v5 the properties of the body were emitted in the order of
@@ -473,8 +491,9 @@ Fastify v6 does not only break things, it brings new ones:
   `schemaController.inputValidatorOptions` for the pool that validates the
   request, and `schemaController.outputValidatorOptions` for the pool that
   validates and shapes the response. The output pool is strict by default: it
-  never coerces a type, never injects a default, and strips the properties
-  that the response schema does not declare.
+  never coerces a type, never injects a default, strips the properties
+  that the response schema does not declare and never lints the response
+  schemas.
 
 The [Validation and Serialization](../Reference/Validation-and-Serialization.md)
 documentation describes the whole surface.

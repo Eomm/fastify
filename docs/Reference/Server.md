@@ -1891,7 +1891,12 @@ const fastify = Fastify({
         // not be used on the output side: it removes every additional
         // property, even the ones that an `additionalProperties: <schema>`
         // allows.
-        removeAdditional: true
+        removeAdditional: true,
+        // The output pool never lints the response schemas: an unknown or an
+        // annotation keyword (`example`, `discriminator`, ...) and a schema
+        // with no `type` are tolerated. `fast-json-stringify` never linted
+        // them either. The lint can be turned back on with `strict: true`.
+        strict: false
       }
     },
 

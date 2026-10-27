@@ -619,7 +619,8 @@ as it is. The defaults are:
   useDefaults: false,     // never inject a default into a response
   coerceTypes: false,     // never coerce the type of a response value
   removeAdditional: true, // strip the properties that the schema does not declare
-  allErrors: false
+  allErrors: false,       // report the first error only
+  strict: false           // never lint the response schema
 }
 ```
 
@@ -654,6 +655,31 @@ every member.
 Every default can be overridden through the
 `schemaController.outputValidatorOptions.customOptions` option, or through the
 `schemaController.compilersFactory.buildOutputValidator` factory.
+
+The `strict: false` default is a **schema lint switch only**: the output pool
+never rejects a response schema for carrying an unknown or an annotation
+keyword (`example`, `discriminator`, ...) or for omitting its `type`. It does
+not weaken the four data options above: a payload that violates the schema
+still answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error.
+
+`fast-json-stringify` never linted the response schemas, so the output side
+must not lint them either. The lint can be turned back on through the custom
+options of the pool:
+
+```js
+const fastify = Fastify({
+  schemaController: {
+    outputValidatorOptions: {
+      customOptions: {
+        strict: true
+      }
+    }
+  }
+})
+```
+
+A response schema that carries an unknown keyword then fails at boot with the
+`FST_ERR_SCH_SERIALIZATION_BUILD` error.
 
 To change or set additional config options, create a custom instance and
 override the existing one:

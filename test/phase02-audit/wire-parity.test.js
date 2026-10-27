@@ -376,7 +376,8 @@ test('the transform resolves the member of a composition that references another
 
   // A member whose reference cannot be resolved leaves the composition
   // without an `additionalProperties`: the parity layer never removes a
-  // property it cannot prove to be extra.
+  // property it cannot prove to be extra. The reference itself is left in
+  // the schema: the parity layer never drops a reference.
   t.assert.deepStrictEqual(
     applyFjsObjectParity({
       allOf: [
@@ -770,6 +771,37 @@ test('a composition whose member carries its own identifier keeps the properties
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member carries an unresolvable reference does not compile', async (t) => {
+  // The parity layer never drops a reference: a reference it cannot resolve
+  // stays in the schema, so the validator cannot compile it. The route
+  // answers a `FST_ERR_SCH_SERIALIZATION_BUILD` error instead of a body:
+  // there is no body that could be a subset of the fjs body.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'nowhere' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ b: 2 }))
+
+  await t.assert.rejects(
+    fastify.ready(),
+    (err) => {
+      t.assert.strictEqual(err.code, 'FST_ERR_SCH_SERIALIZATION_BUILD')
+      t.assert.match(err.message, /can't resolve reference nowhere/)
+      return true
+    }
+  )
 })
 
 test('a nullable object schema answers an empty object', async (t) => {

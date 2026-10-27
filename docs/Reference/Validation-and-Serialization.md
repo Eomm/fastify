@@ -1130,6 +1130,18 @@ Two divergences of the error path are worth knowing:
   built-in error serializer, because the error path does not await an
   asynchronous validator.
 
+The body of an error carries the **own enumerable properties** of the error
+object: the `message` of the error is part of the body already, the `stack` is
+never copied, but every other property that the error carries is. An error
+schema that allows additional properties — an `additionalProperties: true`, or
+an `additionalProperties` schema — therefore exposes them to the client: the
+Ajv `validation` array and the `validationContext` property of a failed output
+validation, and every property that the application attaches to the error. An
+error schema that declares no `additionalProperties` drops them (the parity
+layer declares `additionalProperties: false`, see
+[the strict output defaults](#output-validator-defaults)), exactly as the v5
+serializer did.
+
 #### A custom serializer disables the response validation
 
 A reply that is handled by a custom serializer — [`reply.serializer(fn)`](./Reply.md#serializerfunc)

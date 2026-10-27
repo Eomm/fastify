@@ -248,6 +248,24 @@ error serializer.
 **Action:** do not declare an `$async` output schema on the routes that answer
 errors.
 
+#### The error schema that allows additional properties exposes the error
+
+**Old:** in Fastify v5 the body of an error was shaped by the error schema of
+the route, and the body carried the own enumerable properties of the error: an
+error schema that allowed additional properties exposed them to the client.
+
+**New:** the behaviour is unchanged: the body of an error carries the **own
+enumerable properties** of the error object, so an error schema that declares
+`additionalProperties: true` (or an `additionalProperties` schema) sends them
+to the client. That is the Ajv `validation` array and the `validationContext`
+property of a failed output validation, and every property that the
+application attaches to the error. An error schema that declares no
+`additionalProperties` drops them, exactly as the v5 serializer did.
+
+**Action:** do not attach sensitive data to the errors of a route whose error
+schema allows additional properties: declare the properties that the client
+needs in the error schema instead.
+
 ### The removed serialization APIs
 
 #### `reply.getSerializationFunction()`, `reply.compileSerializationSchema()` and `reply.serializeInput()` are removed

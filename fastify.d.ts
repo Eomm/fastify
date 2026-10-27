@@ -152,7 +152,7 @@ declare namespace fastify {
       };
       compilersFactory?: {
         buildValidator?: ValidatorFactory;
-        buildOutputValidator?: ValidatorFactory;
+        buildOutputValidator?: BuildCompilerFromPool;
       };
       outputValidatorOptions?: Parameters<BuildCompilerFromPool>[1];
     };

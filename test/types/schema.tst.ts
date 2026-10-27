@@ -1,4 +1,4 @@
-import { BuildCompilerFromPool, StandaloneValidator } from '@fastify/ajv-compiler'
+import { AjvCompiler, BuildCompilerFromPool, StandaloneValidator } from '@fastify/ajv-compiler'
 import Ajv from 'ajv'
 import { expect } from 'tstyche'
 import fastify, { FastifyInstance, FastifySchema } from '../../fastify.js'
@@ -141,6 +141,21 @@ expect(server.setValidatorCompiler<FastifySchema & { validate: Record<string, un
     }
   })
   expect(outputFactoryServer).type.toBeAssignableTo<FastifyInstance>()
+}
+
+{
+  // The JTD *serializer* factory cannot build an output validator: the output
+  // side compiles validators, never serializers.
+  const jtdSerializerFactory = AjvCompiler({ jtdSerializer: true })
+
+  fastify({
+    schemaController: {
+      compilersFactory: {
+        // @ts-expect-error  No overload matches this call.
+        buildOutputValidator: jtdSerializerFactory
+      }
+    }
+  })
 }
 
 // The output validation context is part of the validation context union

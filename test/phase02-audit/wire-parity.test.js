@@ -1839,6 +1839,79 @@ test('a composition whose member references a local definition that carries a ne
   t.assert.strictEqual(response.payload, '{"nested":{"x":"s"}}')
 })
 
+test('a composition whose member references a local definition that lives inside another scope resolves its relative references against that scope', async (t) => {
+  // The relative reference of the copy of the local definition must be
+  // resolved against the base of the scope that **encloses** the definition:
+  // the definition lives inside another scope (an ancestor that carries an
+  // identifier), and the base of a scope is the base of its parent scope.
+  // The copy would otherwise resolve another document than the original
+  // definition, and the route would not build at all.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({ $id: 'http://fastify.test/dir/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $id: 'http://fastify.test/root',
+          $defs: {
+            outer: {
+              $id: 'http://fastify.test/dir/outer',
+              $defs: {
+                inner: { type: 'object', properties: { x: { $ref: 'other' } } }
+              }
+            }
+          },
+          allOf: [{ $ref: '#/$defs/outer/$defs/inner' }]
+        }
+      }
+    }
+  }, async () => ({ x: 's' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"x":"s"}')
+})
+
+test('a composition whose member references a local definition that lives inside a scope with a relative identifier resolves its relative references against that scope', async (t) => {
+  // The base of the scope that encloses the local definition is the base of
+  // its **parent** scope, with the identifier of the scope resolved against
+  // it: a scope that declares a relative identifier opens a scope whose base
+  // is resolved against the base of the document that holds it. The copy
+  // would otherwise resolve another document than the original definition,
+  // and the route would not build at all.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({ $id: 'http://fastify.test/dir/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $id: 'http://fastify.test/root',
+          type: 'object',
+          properties: {
+            a: {
+              $id: 'dir/scope',
+              $defs: {
+                inner: { type: 'object', properties: { x: { $ref: 'other' } } }
+              },
+              allOf: [{ $ref: '#/$defs/inner' }]
+            }
+          }
+        }
+      }
+    }
+  }, async () => ({ a: { x: 's' } }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":{"x":"s"}}')
+})
+
 test('a composition whose member carries a reference and a sibling container is built', async (t) => {
   // The copy of the referenced schema replaces the member of the composition
   // and it lives in the scope of the document: the entries of a sibling

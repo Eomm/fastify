@@ -22,8 +22,7 @@ API to notify users of deprecated features and coding mistakes. Fastify's
 warnings are recognizable by the `FSTWRN` and `FSTDEP` prefixes. When
 encountering such a warning, it is highly recommended to determine the cause
 using the [`--trace-warnings`](https://nodejs.org/api/cli.html#trace-warnings)
-and [`--trace-deprecation`](https://nodejs.org/api/cli.html#trace-deprecation)
-flags. These produce stack traces pointing to where the issue occurs in the
+flag. It produces a stack trace pointing to where the issue occurs in the
 application's code. Issues opened about warnings without this information will
 be closed.
 
@@ -56,11 +55,34 @@ Disabling warnings is not recommended and may cause unexpected behavior.
 
 ### Fastify Deprecation Codes
 
-Deprecation codes are supported by the Node.js CLI options:
+Deprecation codes are emitted with the `FastifyDeprecation` warning type.
+The Node.js deprecation CLI options only apply to the `DeprecationWarning`
+type, so they do not apply to the Fastify deprecation codes:
 
-- [--no-deprecation](https://nodejs.org/api/cli.html#no-deprecation)
-- [--throw-deprecation](https://nodejs.org/api/cli.html#throw-deprecation)
-- [--trace-deprecation](https://nodejs.org/api/cli.html#trace-deprecation)
+- [--no-deprecation](https://nodejs.org/api/cli.html#no-deprecation) does not
+  silence them
+- [--throw-deprecation](https://nodejs.org/api/cli.html#throw-deprecation) does
+  not turn them into an exception
+- [--trace-deprecation](https://nodejs.org/api/cli.html#trace-deprecation) does
+  not print their stack: the
+  [--trace-warnings](https://nodejs.org/api/cli.html#trace-warnings) option
+  prints the stack of every warning, the deprecation ones included
+
+A deprecation code is silenced with the
+[--disable-warning](https://nodejs.org/api/cli.html#--disable-warning) option,
+which takes the code of the warning (`--disable-warning=FSTDEP026`), or with
+the `NODE_NO_WARNINGS` environment variable and the `--no-warnings` flag, which
+silence every warning. A `process.on('warning')` listener can filter them:
+
+```js
+process.on('warning', (warning) => {
+  // The deprecation codes of Fastify are filtered here
+  if (warning.code === 'FSTDEP026') {
+    return
+  }
+  console.warn(warning)
+})
+```
 
 There is currently one active deprecation code: the top-level `ajv` server
 option is deprecated in Fastify v6 and it will be removed in a future release.

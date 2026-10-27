@@ -495,6 +495,19 @@ body, URL parameters, headers, and query string. The default `validatorCompiler`
 returns a function that implements the [ajv](https://ajv.js.org/) validation
 interface. Fastify uses it internally to speed up validation.
 
+Fastify owns two separate pools of compilers: the **input** pool validates the
+request and the **output** pool validates and shapes the response. The two
+pools are read through the two instance level accessors
+[`fastify.inputValidatorCompiler`](./Server.md#input-validator-compiler) and
+[`fastify.outputValidatorCompiler`](./Server.md#output-validator-compiler). The
+input pool is built by the `compilersFactory.buildInputValidator` factory and
+the output pool by the `compilersFactory.buildOutputValidator` factory. The
+input side is configured through the
+[`schemaController.inputValidatorOptions`](./Server.md#schema-controller)
+option, and the output side through the
+[`schemaController.outputValidatorOptions`](./Server.md#schema-controller)
+option: the options that make sense differ per direction.
+
 Fastify's [baseline ajv
 configuration](https://github.com/fastify/ajv-compiler#ajv-configuration) is:
 
@@ -511,8 +524,11 @@ configuration](https://github.com/fastify/ajv-compiler#ajv-configuration) is:
 }
 ```
 
-Modify the baseline configuration by providing
-[`ajv.customOptions`](./Server.md#factory-ajv) to the Fastify factory.
+Modify the baseline configuration by providing the
+[`schemaController.inputValidatorOptions`](./Server.md#schema-controller) option
+to the Fastify factory. The top-level
+[`ajv`](./Server.md#factory-ajv) option still configures the input pool, but
+it is deprecated in Fastify v6.
 
 To change or set additional config options, create a custom instance and
 override the existing one:
@@ -529,6 +545,31 @@ const ajv = new Ajv({
 })
 fastify.setValidatorCompiler(({ schema, method, url, httpPart }) => {
   return ajv.compile(schema)
+})
+```
+
+The same custom compiler can be installed through the
+`compilersFactory.buildInputValidator` key of the `schemaController` option,
+which builds the whole input pool:
+
+```js
+const Ajv = require('ajv')
+const ajv = new Ajv({
+  removeAdditional: 'all',
+  useDefaults: true,
+  coerceTypes: 'array'
+})
+
+const fastify = require('fastify')({
+  schemaController: {
+    compilersFactory: {
+      buildInputValidator (externalSchemas, inputValidatorOptions) {
+        return function ({ schema, method, url, httpPart }) {
+          return ajv.compile(schema)
+        }
+      }
+    }
+  }
 })
 ```
 

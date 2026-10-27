@@ -80,7 +80,8 @@ describes the properties available in that options object.
     - [setReplySerializer](#setreplyserializer)
     - [setValidatorCompiler](#setvalidatorcompiler)
     - [setSchemaErrorFormatter](#setschemaerrorformatter)
-    - [validatorCompiler](#validatorcompiler)
+    - [inputValidatorCompiler](#inputvalidatorcompiler)
+    - [outputValidatorCompiler](#outputvalidatorcompiler)
     - [schemaErrorFormatter](#schemaerrorformatter)
     - [schemaController](#schemacontroller)
     - [setNotFoundHandler](#setnotfoundhandler)
@@ -745,6 +746,13 @@ property are gone as well: they throw the `FST_ERR_SERIALIZER_COMPILER_REMOVED`
 error. The `compilersFactory.buildSerializer` key of the `schemaController`
 option is rejected too. The response schema still validates and shapes the
 payload, but it does not compile a serializer any more.
+
+The instance level accessors of the compilers have been renamed as well: the
+input side is read through `fastify.inputValidatorCompiler` and the response
+side through `fastify.outputValidatorCompiler`. The old
+`fastify.validatorCompiler` property does not exist any more, and the old
+`fastify.serializerCompiler` property keeps throwing the
+`FST_ERR_SERIALIZER_COMPILER_REMOVED` error.
 
 See the V5 to V6 migration guide for the details.
 
@@ -1783,14 +1791,40 @@ Set the schema validator compiler for all routes. See
 Set the schema error formatter for all routes. See
 [#error-handling](./Validation-and-Serialization.md#schemaerrorformatter).
 
-#### validatorCompiler
-<a id="validator-compiler"></a>
+#### inputValidatorCompiler
+<a id="input-validator-compiler"></a>
 
-This property can be used to get the schema validator. If not set, it will be
-`null` until the server starts, then it will be a function with the signature
+This property can be used to get the input schema validator compiler. It reads
+the input Ajv pool of the [`schemaController`](#schema-controller). Until the
+input pool is built, it answers `undefined`: the pool is built when a route
+declares a request side schema (`body`, `headers`, `querystring` or `params`).
+Once it is built, it is a function with the signature
 `function ({ schema, method, url, httpPart })` that returns the input `schema`
 compiled to a function for validating data. The input `schema` can access all
 the shared schemas added with [`.addSchema`](#add-schema) function.
+
+> ℹ️ Note:
+> This property was named `validatorCompiler` in Fastify v5. The old name has
+> been renamed in Fastify v6 and it does not exist any more.
+> See the V5 to V6 migration guide for the details.
+
+#### outputValidatorCompiler
+<a id="output-validator-compiler"></a>
+
+This property can be used to get the output schema validator compiler. It reads
+the output Ajv pool of the [`schemaController`](#schema-controller). Until the
+output pool is built, it answers `undefined`: the pool is built when a route
+declares a response schema. Once it is built, it is a function with the
+signature `function ({ schema, method, url, httpPart, httpStatus, contentType })`
+that returns the response `schema` compiled to a function that validates and
+shapes the response payload.
+
+> ℹ️ Note:
+> The response side of Fastify v5 was serialized by the serializer compiler,
+> read through the `fastify.serializerCompiler` property. That compiler does
+> not exist any more in Fastify v6: the old property keeps throwing the
+> `FST_ERR_SERIALIZER_COMPILER_REMOVED` error.
+> See the V5 to V6 migration guide for the details.
 
 #### schemaErrorFormatter
 <a id="schema-error-formatter"></a>

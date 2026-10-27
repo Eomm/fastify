@@ -419,6 +419,175 @@ test('a response whose status code matches no entry is sent without validation',
   t.assert.strictEqual(result.payload, '{"message":"not found"}')
 })
 
+test('the output validator is selected for the NXX wildcard entry', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/invalid', {
+    schema: {
+      response: {
+        '2xx': {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(201).send({ hello: 42 })
+  })
+
+  fastify.get('/valid', {
+    schema: {
+      response: {
+        '2xx': {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(201).send({ hello: 'world' })
+  })
+
+  // The `2xx` entry is the one that applies to a `201` response: the payload
+  // that violates it is rejected...
+  const invalid = await fastify.inject('/invalid')
+  t.assert.strictEqual(invalid.statusCode, 500)
+  t.assert.strictEqual(JSON.parse(invalid.payload).code, 'FST_ERR_OUTPUT_VALIDATION')
+
+  // ... and the payload that satisfies it is accepted.
+  const valid = await fastify.inject('/valid')
+  t.assert.strictEqual(valid.statusCode, 201)
+  t.assert.strictEqual(valid.payload, '{"hello":"world"}')
+})
+
+test('the output validator is selected for the default entry', async (t) => {
+  let capturedError = null
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/invalid', {
+    schema: {
+      response: {
+        default: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(201).send({ hello: 42 })
+  })
+
+  fastify.get('/valid', {
+    schema: {
+      response: {
+        default: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(201).send({ hello: 'world' })
+  })
+
+  // The `default` entry is the last fallback of the lookup: it applies to a
+  // status code that matches no other entry. The error is captured through
+  // the `onError` hook, because the error path picks the `default` entry up
+  // too: the body of the error is shaped by it.
+  const invalid = await fastify.inject('/invalid')
+  t.assert.strictEqual(invalid.statusCode, 500)
+  t.assert.ok(capturedError, 'the error hook received the error')
+  t.assert.strictEqual(capturedError.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.strictEqual(capturedError.validationContext, 'response')
+
+  const valid = await fastify.inject('/valid')
+  t.assert.strictEqual(valid.statusCode, 201)
+  t.assert.strictEqual(valid.payload, '{"hello":"world"}')
+})
+
+test('the exact status code wins over the NXX wildcard entry', async (t) => {
+  let capturedError = null
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addHook('onError', (request, reply, error, done) => {
+    capturedError = error
+    done()
+  })
+
+  fastify.get('/exact', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        },
+        '2xx': {
+          type: 'object'
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(200).send({ hello: 42 })
+  })
+
+  fastify.get('/wildcard', {
+    schema: {
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            hello: { type: 'string' }
+          },
+          required: ['hello']
+        },
+        '2xx': {
+          type: 'object'
+        }
+      }
+    }
+  }, async (req, reply) => {
+    reply.code(201).send({ hello: 42 })
+  })
+
+  // The `200` entry wins over the `2xx` one: the payload that violates the
+  // strict entry is rejected.
+  const exact = await fastify.inject('/exact')
+  t.assert.strictEqual(exact.statusCode, 500)
+  t.assert.ok(capturedError, 'the error hook received the error')
+  t.assert.strictEqual(capturedError.code, 'FST_ERR_OUTPUT_VALIDATION')
+
+  // The `2xx` entry applies to the `201` response: the same payload is
+  // accepted, because the `2xx` entry does not constrain it. The property-less
+  // object schema drops every property, exactly like `fast-json-stringify`
+  // did.
+  const wildcard = await fastify.inject('/wildcard')
+  t.assert.strictEqual(wildcard.statusCode, 201)
+  t.assert.strictEqual(wildcard.payload, '{}')
+})
+
 test('a content type that the response schema does not declare fails closed', async (t) => {
   const fastify = Fastify()
   t.after(() => fastify.close())

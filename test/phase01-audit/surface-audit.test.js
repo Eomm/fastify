@@ -25,12 +25,12 @@ test('01-03/T1: types/schema.d.ts declares the output side option surface', (t) 
 
   t.assert.match(
     source,
-    /outputValidatorOptions\?\s*:\s*Parameters<BuildCompilerFromPool>\[1\]/,
+    /outputValidatorOptions\?\s*:\s*FastifyOutputValidatorOptions/,
     'the outputValidatorOptions option is declared'
   )
   t.assert.match(
     source,
-    /buildOutputValidator\?\s*:\s*ValidatorFactory/,
+    /buildOutputValidator\?\s*:\s*BuildCompilerFromPool/,
     'the buildOutputValidator factory slot is declared'
   )
   t.assert.match(
@@ -45,12 +45,12 @@ test('01-03/T1: fastify.d.ts declares the same output side option surface', (t) 
 
   t.assert.match(
     source,
-    /outputValidatorOptions\?\s*:\s*Parameters<BuildCompilerFromPool>\[1\]/,
+    /outputValidatorOptions\?\s*:\s*FastifyOutputValidatorOptions/,
     'the outputValidatorOptions option is declared'
   )
   t.assert.match(
     source,
-    /buildOutputValidator\?\s*:\s*ValidatorFactory/,
+    /buildOutputValidator\?\s*:\s*BuildCompilerFromPool/,
     'the buildOutputValidator factory slot is declared'
   )
 })

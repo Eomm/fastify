@@ -483,6 +483,74 @@ test('the transform resolves the member of a composition that references another
     'the nested identifier of a shared document is rebased'
   )
 
+  // A relative reference of a shared document is resolved against the base
+  // of the document: the copy of the document lives in another document, so
+  // the reference must carry the base of the source document, exactly like
+  // the JSON Schema resolution rules do.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test/base' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test/base': {
+            $id: 'http://fastify.test/base',
+            type: 'object',
+            properties: {
+              nested: { $ref: 'other' },
+              withFragment: { $ref: 'other#/$defs/x' },
+              absolute: { $ref: 'http://fastify.test/absolute' }
+            }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            nested: { $ref: 'http://fastify.test/other' },
+            withFragment: { $ref: 'http://fastify.test/other#/$defs/x' },
+            absolute: { $ref: 'http://fastify.test/absolute' }
+          },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true, withFragment: true, absolute: true },
+      additionalProperties: false
+    },
+    'the relative references of a shared document are rebased'
+  )
+
+  // A shared document that is indexed under another identifier than its own
+  // keeps the identifier of the document as the base of its references.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'alias' }] },
+      {
+        sharedDocuments: {
+          alias: {
+            $id: 'http://fastify.test/base',
+            type: 'object',
+            properties: { nested: { $ref: 'other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'http://fastify.test/other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'the identifier of the document is the base of its references'
+  )
+
   // A circular reference is not resolved: the transform does not loop.
   t.assert.deepStrictEqual(
     applyFjsObjectParity({
@@ -618,6 +686,38 @@ test('a composition whose member references a shared document keeps the properti
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member references a shared document that references another document keeps the properties', async (t) => {
+  // The copy of the shared document lives in the schema of the route: the
+  // relative reference it carries must be resolved against the base of the
+  // source document, or the validator cannot resolve it at all.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test/base',
+    type: 'object',
+    properties: { nested: { $ref: 'other' } }
+  })
+  fastify.addSchema({ $id: 'http://fastify.test/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'http://fastify.test/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ nested: 's', b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":"s","b":2}')
 })
 
 test('a nullable object schema answers an empty object', async (t) => {

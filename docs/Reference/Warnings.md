@@ -62,8 +62,9 @@ Deprecation codes are supported by the Node.js CLI options:
 - [--throw-deprecation](https://nodejs.org/api/cli.html#throw-deprecation)
 - [--trace-deprecation](https://nodejs.org/api/cli.html#trace-deprecation)
 
-There are currently no active deprecation codes because the APIs deprecated in
-Fastify v5 have been removed in Fastify v6.
+There is currently one active deprecation code: the top-level `ajv` server
+option is deprecated in Fastify v6 and it will be removed in a future release.
 
 | Code | Description | How to solve | Discussion |
 | ---- | ----------- | ------------ | ---------- |
+| <a id="FSTDEP026">FSTDEP026</a> | The top-level `ajv` server option is deprecated in Fastify v6 and will be removed in a future release. | Move the option to `schemaController.inputValidatorOptions`: the content of the option does not change. | - |

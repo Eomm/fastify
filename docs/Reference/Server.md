@@ -676,6 +676,14 @@ clients do not attempt to reuse the connection.
 ### `ajv`
 <a id="factory-ajv"></a>
 
+> ⚠️ **Deprecated**: the top-level `ajv` server option is deprecated in Fastify
+> v6. It still works, but every server that uses it emits the `FSTDEP026`
+> deprecation warning (once per server) and the option will be removed in a
+> future release. Use the
+> [`schemaController.inputValidatorOptions`](#schema-controller) option
+> instead: it configures the same pool, with the same content.
+> See the V5 to V6 migration guide for the details.
+
 Configure the Ajv v8 instance used by Fastify without providing a custom one.
 The default configuration is explained in the
 [#schema-validator](./Validation-and-Serialization.md#schema-validator) section.
@@ -695,6 +703,31 @@ const fastify = require('fastify')({
     onCreate: (ajv) => {
       // Modify the ajv instance as you need.
       ajv.addFormat('myFormat', (data) => typeof data === 'string')
+    }
+  }
+})
+```
+
+The same configuration, written with the option that replaces the deprecated
+one:
+
+```js
+const fastify = require('fastify')({
+  schemaController: {
+    inputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all' // Refer to [ajv options](https://ajv.js.org/options.html#removeadditional)
+      },
+      plugins: [
+        require('ajv-merge-patch'),
+        [require('ajv-keywords'), 'instanceof']
+        // Usage: [plugin, pluginOptions] - Plugin with options
+        // Usage: plugin - Plugin without options
+      ],
+      onCreate: (ajv) => {
+        // Modify the ajv instance as you need.
+        ajv.addFormat('myFormat', (data) => typeof data === 'string')
+      }
     }
   }
 })
@@ -1772,6 +1805,8 @@ the `validationCompiler` fails to validate the schema. See
 This property can be used to fully manage:
 - `bucket`: where the schemas of your application will be stored
 - `compilersFactory`: what module must compile the JSON schemas
+- `inputValidatorOptions`: the options of the pool that validates the request
+- `outputValidatorOptions`: the options of the pool that validates the response
 
 It can be useful when your schemas are stored in another data structure that is
 unknown to Fastify.
@@ -1784,6 +1819,33 @@ documentation](https://github.com/fastify/ajv-compiler#usage).
 ```js
 const fastify = Fastify({
   schemaController: {
+    /**
+     * The options of the pool that validates the request. They are the
+     * options of the pool builder: they replace the deprecated top-level
+     * `ajv` server option.
+     */
+    inputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all'
+      },
+      plugins: [
+        require('ajv-merge-patch')
+      ],
+      onCreate: (ajv) => {
+        ajv.addFormat('myFormat', (data) => typeof data === 'string')
+      }
+    },
+
+    /**
+     * The options of the pool that validates the response. They are the
+     * options of the pool builder too.
+     */
+    outputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all'
+      }
+    },
+
     /**
      * This factory is called whenever `fastify.register()` is called.
      * It may receive as input the schemas of the parent context if some schemas have been added.
@@ -1826,7 +1888,8 @@ const fastify = Fastify({
        * @param {object} externalSchemas these schemas will be returned by the
        * `bucket.getSchemas()`. Needed to resolve the external references $ref.
        * @param {object} inputValidatorOptions the options of the input validator
-       * (the server `ajv` options) to build your compilers accordingly
+       * (the `schemaController.inputValidatorOptions` options) to build your
+       * compilers accordingly
        */
       buildInputValidator: function factory (externalSchemas, inputValidatorOptions) {
         // This factory function must return a schema validator compiler.

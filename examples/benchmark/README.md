@@ -21,10 +21,15 @@ native serializer saves.
 
 The `v6` measurement uses the **published** surface of the framework: the
 output defaults of the output Ajv pool (`useDefaults: false`,
-`coerceTypes: false`, `removeAdditional: 'all'`, `allErrors: false`,
+`coerceTypes: false`, `removeAdditional: true`, `allErrors: false`,
 `strict: false`) and the published parity transform
 (`applyFjsObjectParity()` of `lib/output-schema-parity.js`). The benchmark
 never imports a module private symbol of the runtime.
+
+The benchmark compares the bytes of the `v6` path and the bytes of the fjs
+baseline before it measures anything: the two paths must serialize the same
+bytes, and a divergence is reported instead of being published as a number of
+a pipeline that the runtime does not use.
 
 The `fjs` baseline uses the `fast-json-stringify` **devDependency** of this
 repository: the benchmark adds no runtime dependency, and the scripts of this
@@ -46,8 +51,9 @@ node examples/benchmark/serialization.js --list
 ```
 
 It prints the operations per second and the time per operation of the three
-measurements, for every shape, and it exits with a non-zero code when it
-cannot run (a missing dependency, an unusable schema).
+measurements, for every shape, the comparison of the bytes of the two paths,
+and it exits with a non-zero code when it cannot run (a missing dependency, an
+unusable schema).
 
 ## The end to end serialization benchmark
 

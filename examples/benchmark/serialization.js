@@ -24,8 +24,15 @@
  * **the same bytes** and the difference between the columns is the cost of
  * the schema driven serialization (fjs) against the cost of the output
  * validation and of the native serialization (v6). The output validation of
- * the v6 path performs the shaping too: the Ajv `removeAdditional: 'all'`
- * pass walks the properties of the payload.
+ * the v6 path performs the shaping too: the output pool is configured with
+ * `removeAdditional: true`, and the parity layer declares
+ * `additionalProperties: false` exactly where the v5 serializer dropped the
+ * extra properties.
+ *
+ * The benchmark compares the bytes of the two paths before it measures
+ * anything: a shape whose bytes diverge is reported as a divergence, and it
+ * is never published as the number of a pipeline that the runtime does not
+ * use.
  *
  * The measurements are the measurements of one machine: they are not a promise.
  *
@@ -50,11 +57,20 @@ const { applyFjsObjectParity } = require('../../lib/output-schema-parity')
  * the benchmark does **not** import the module private factory of the runtime,
  * it uses the documented values, so the measurement is the one the framework
  * performs.
+ *
+ * The value of `removeAdditional` is `true`, and **not** `'all'`: the option
+ * removes a property only where the schema declares
+ * `additionalProperties: false`, and the parity layer of
+ * `lib/output-schema-parity.js` declares it exactly where the v5 serializer
+ * dropped the extra properties. The value `'all'` would remove every
+ * additional property, even the ones that an `additionalProperties: <schema>`
+ * allows: the measurement would be the one of a pipeline that the runtime does
+ * not use.
  */
 const OUTPUT_VALIDATOR_DEFAULTS = {
   useDefaults: false,
   coerceTypes: false,
-  removeAdditional: 'all',
+  removeAdditional: true,
   allErrors: false,
   strict: false
 }
@@ -388,6 +404,7 @@ function main () {
 
   const opsRows = []
   const microsRows = []
+  const bytesRows = []
 
   for (const shape of selected) {
     let validate
@@ -408,6 +425,20 @@ function main () {
       console.error(JSON.stringify(validate.errors))
       return 1
     }
+
+    // The two paths must produce the same bytes: the comparison is done on a
+    // copy of the payload, so that the measured payload is never shaped
+    // before the measurement. A shape whose bytes diverge is a divergence,
+    // and the results file must say so instead of publishing the number of
+    // a pipeline that the runtime does not use.
+    const probe = JSON.parse(JSON.stringify(shape.payload))
+    const fjsBytes = fjsSerializer(shape.payload)
+    // The validator shapes the data in place and answers `true`: the shaped
+    // payload is the one that the native serializer writes.
+    validate(probe)
+    const v6Bytes = JSON.stringify(probe)
+    const sameBytes = fjsBytes === v6Bytes
+    bytesRows.push([shape.name, sameBytes ? 'same as fjs' : 'DIVERGENT'])
 
     const fjs = measureBest((payload) => fjsSerializer(payload), shape.payload, options)
     const native = measureBest((payload) => JSON.stringify(payload), shape.payload, options)
@@ -440,6 +471,8 @@ function main () {
   printTable(['shape', 'fjs ops/s', 'JSON.stringify ops/s', 'v6 ops/s'], opsRows)
   console.log('')
   printTable(['shape', 'fjs us/op', 'JSON.stringify us/op', 'v6 us/op'], microsRows)
+  console.log('')
+  printTable(['shape', 'bytes of the v6 path'], bytesRows)
 
   // One summary line: what the native serializer saves and what the output
   // validation costs.

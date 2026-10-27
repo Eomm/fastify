@@ -80,7 +80,8 @@ Request is a core Fastify object containing the following fields:
   - `url` - The path of the URL to match this route.
   - `handler` - The handler for this route.
   - `attachRequestValidation` - Attach `validationError` to request (if there is
-    a schema defined).
+    a schema defined). The option was named `attachValidation` in v5: see the
+    [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md).
   - `logLevel` - Log level defined for this route.
   - `schema` - The JSON schemas definition for this route.
   - `version` - A semver compatible string that defines the version of the endpoint.

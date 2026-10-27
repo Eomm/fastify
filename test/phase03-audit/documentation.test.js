@@ -46,6 +46,10 @@ const typeProviders = readFileSync(
   resolve(__dirname, '../../docs/Reference/Type-Providers.md'),
   'utf8'
 )
+const request = readFileSync(
+  resolve(__dirname, '../../docs/Reference/Request.md'),
+  'utf8'
+)
 
 /**
  * The reference documents that document the removed serialization APIs.
@@ -277,6 +281,29 @@ test('the reference document describes the two option families and the error pat
 
   for (const surface of surfaces) {
     t.assert.ok(reference.includes(surface), surface)
+  }
+})
+
+test('the reference documents that publish the renamed route option publish its v5 name and the guide', (t) => {
+  const documents = [
+    ['Request', request],
+    ['Routes', routes],
+    ['Validation and Serialization', reference]
+  ]
+
+  for (const [name, document] of documents) {
+    if (!document.includes('attachRequestValidation')) {
+      continue
+    }
+
+    t.assert.ok(
+      document.includes('attachValidation'),
+      `${name}: the renamed route option does not publish its v5 name`
+    )
+    t.assert.ok(
+      document.includes('Migration-Guide-V6.md'),
+      `${name}: the renamed route option does not link to the migration guide`
+    )
   }
 })
 

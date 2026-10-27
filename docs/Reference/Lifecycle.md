@@ -98,9 +98,14 @@ Otherwise, the data flows as follows:
 
 `reply sent` means the JSON payload will be serialized by one of the following:
 - The [reply serializer](./Server.md#setreplyserializer) if set
-- The [serializer compiler](./Server.md#setserializercompiler) if a JSON schema
-  is set for the HTTP status code
 - The default `JSON.stringify` function
+
+When a JSON schema is set for the HTTP status code, the payload is validated
+and shaped by the
+[output validator compiler](./Server.md#output-validator-compiler) before it
+is serialized. The serializer compiler of Fastify v5 does not exist any more:
+see the [Removed in v6](./Server.md#removed-in-v6) section of the server
+reference.
 
 ## Shutdown Lifecycle
 <a id="shutdown-lifecycle"></a>

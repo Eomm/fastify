@@ -1880,7 +1880,14 @@ const fastify = Fastify({
      */
     outputValidatorOptions: {
       customOptions: {
-        removeAdditional: 'all'
+        // The output pool is strict by default: `removeAdditional: true`
+        // strips the properties that the schema does not declare (the parity
+        // layer declares `additionalProperties: false` exactly where the v5
+        // serializer dropped the extra properties). The value `'all'` must
+        // not be used on the output side: it removes every additional
+        // property, even the ones that an `additionalProperties: <schema>`
+        // allows.
+        removeAdditional: true
       }
     },
 

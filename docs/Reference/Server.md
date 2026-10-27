@@ -683,7 +683,8 @@ clients do not attempt to reuse the connection.
 > future release. Use the
 > [`schemaController.inputValidatorOptions`](#schema-controller) option
 > instead: it configures the same pool, with the same content.
-> See the V5 to V6 migration guide for the details.
+> See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
+> the details.
 
 Configure the Ajv v8 instance used by Fastify without providing a custom one.
 The default configuration is explained in the
@@ -754,7 +755,8 @@ side through `fastify.outputValidatorCompiler`. The old
 `fastify.serializerCompiler` property keeps throwing the
 `FST_ERR_SERIALIZER_COMPILER_REMOVED` error.
 
-See the V5 to V6 migration guide for the details.
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
+the details.
 
 ### `http2SessionTimeout`
 <a id="http2-session-timeout"></a>
@@ -1806,7 +1808,8 @@ the shared schemas added with [`.addSchema`](#add-schema) function.
 > ℹ️ Note:
 > This property was named `validatorCompiler` in Fastify v5. The old name has
 > been renamed in Fastify v6 and it does not exist any more.
-> See the V5 to V6 migration guide for the details.
+> See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
+> the details.
 
 #### outputValidatorCompiler
 <a id="output-validator-compiler"></a>
@@ -1824,7 +1827,8 @@ shapes the response payload.
 > read through the `fastify.serializerCompiler` property. That compiler does
 > not exist any more in Fastify v6: the old property keeps throwing the
 > `FST_ERR_SERIALIZER_COMPILER_REMOVED` error.
-> See the V5 to V6 migration guide for the details.
+> See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
+> the details.
 
 #### schemaErrorFormatter
 <a id="schema-error-formatter"></a>
@@ -1967,7 +1971,8 @@ const fastify = Fastify({
 > `compilersFactory.buildInputValidator` in Fastify v6. The old key is a hard
 > error: a server that configures it throws the
 > `FST_ERR_BUILD_VALIDATOR_RENAMED` error at startup, it is never a silent
-> fallback. See the V5 to V6 migration guide for the details.
+> fallback. See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md)
+> for the details.
 
 #### setNotFoundHandler
 <a id="set-not-found-handler"></a>

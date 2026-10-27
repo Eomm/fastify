@@ -411,7 +411,8 @@ level reply serializer. In Fastify v5 it followed those serializers, so the
 migration of a custom serializer is `reply.serialize(payload)` →
 `JSON.stringify(payload)`.
 
-See the V5 to V6 migration guide for the details.
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
+the details.
 
 ### .serializer(func)
 <a id="serializer"></a>

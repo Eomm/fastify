@@ -902,7 +902,13 @@ one. The differences a user can observe are:
   *before* the hook runs, so a field that the hook adds reaches the wire;
 * **a property-less object schema answers `{}`**: an object schema that
   declares no `properties` and no `patternProperties` strips every property of
-  the payload, exactly as the v5 serializer did.
+  the payload, exactly as the v5 serializer did. The keywords that make a
+  schema an object schema are the ones the v5 serializer used: `type:
+  'object'`, `properties`, `patternProperties`, `additionalProperties`,
+  `required`, `minProperties`, `maxProperties` and `dependencies`. A schema
+  that declares another keyword only (`propertyNames`, for instance) does not
+  describe an object: it keeps every property of the payload, as the v5
+  serializer did.
 
 #### The native `JSON.stringify()` semantics
 

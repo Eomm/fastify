@@ -222,6 +222,36 @@ const PARITY_MATRIX = [
     fjs: '{"a":"x","b":2}'
   },
   {
+    name: 'a composition whose member references a local definition that carries an identifier keeps the properties of both members',
+    schema: {
+      $defs: { base: { $id: 'urn:base', type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/$defs/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
+    name: 'a composition whose member references a local definition that carries a nested identifier keeps the properties of both members',
+    schema: {
+      $defs: {
+        base: {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          $defs: { inner: { $id: 'urn:inner', type: 'string' } }
+        }
+      },
+      allOf: [
+        { $ref: '#/$defs/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
     name: 'a composition whose member references a legacy definition keeps the properties of both members',
     schema: {
       definitions: { base: { type: 'object', properties: { a: { type: 'string' } } } },

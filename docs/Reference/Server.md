@@ -685,6 +685,10 @@ clients do not attempt to reuse the connection.
 > instead: it configures the same pool, with the same content.
 > See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
 > the details.
+>
+> The two options are never merged: when a server configures both of them,
+> `schemaController.inputValidatorOptions` wins entirely and the content of
+> the deprecated `ajv` option is discarded.
 
 Configure the Ajv v8 instance used by Fastify without providing a custom one.
 The default configuration is explained in the
@@ -1977,6 +1981,12 @@ const fastify = Fastify({
 > [`@fastify/ajv-compiler`](https://github.com/fastify/ajv-compiler) package is
 > not supported by `schemaController.outputValidatorOptions`, and the type does
 > not advertise it.
+
+> ℹ️ Note:
+> `schemaController.inputValidatorOptions` and the deprecated top-level `ajv`
+> server option are never merged: when a server configures both of them, the
+> option of the schema controller wins entirely and the content of the
+> deprecated option is discarded.
 
 > ℹ️ Note:
 > The `compilersFactory.buildValidator` key has been renamed to

@@ -336,6 +336,9 @@ instance that validated the request.
 **New:** the option still works, but it is deprecated: every server that uses
 it emits the `FSTDEP026` deprecation warning. The equivalent configuration
 now lives in `schemaController.inputValidatorOptions`, with the same content.
+When **both** options are present, `schemaController.inputValidatorOptions`
+wins **entirely** and the content of the deprecated option is discarded: the
+two options are never merged.
 
 **Action:** move the option.
 

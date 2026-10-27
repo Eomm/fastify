@@ -667,6 +667,11 @@ test('a schema that describes an object without declaring the object type is an 
     { propertyNames: { pattern: '^a' } },
     'a schema that declares propertyNames is not an object schema'
   )
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ dependencies: { b: ['a'] } }),
+    { dependencies: { b: ['a'] }, additionalProperties: false },
+    'a schema that declares dependencies is an object schema'
+  )
 })
 
 test('a composition whose member references a definition keeps the properties of both members', async (t) => {
@@ -821,6 +826,26 @@ test('a schema that declares only propertyNames keeps every property', async (t)
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"a":1}')
+})
+
+test('a schema that declares only dependencies answers an empty object', async (t) => {
+  // `fast-json-stringify` recognizes an object through the `dependencies`
+  // keyword: it serializes the declared properties only, and the schema
+  // declares none.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: { dependencies: { b: ['a'] } }
+      }
+    }
+  }, async () => ({ a: 1, b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{}')
 })
 
 test('a nullable object schema answers an empty object', async (t) => {

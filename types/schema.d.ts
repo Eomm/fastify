@@ -63,7 +63,7 @@ export interface FastifySchemaControllerOptions {
     getSchemas(): Record<string, unknown>;
   };
   compilersFactory?: {
-    buildValidator?: ValidatorFactory;
+    buildInputValidator?: ValidatorFactory;
     buildOutputValidator?: BuildCompilerFromPool;
   };
   outputValidatorOptions?: FastifyOutputValidatorOptions;

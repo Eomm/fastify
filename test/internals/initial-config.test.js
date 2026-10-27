@@ -447,6 +447,20 @@ test('the serializer factory is rejected at boot', t => {
   }
 })
 
+test('the renamed input factory key is rejected at boot', t => {
+  t.plan(3)
+
+  try {
+    Fastify({ compilersFactory: { buildValidator: () => () => true } })
+
+    t.assert.fail()
+  } catch (error) {
+    t.assert.strictEqual(error.code, 'FST_ERR_BUILD_VALIDATOR_RENAMED')
+    t.assert.ok(error.message.includes('buildInputValidator'))
+    t.assert.ok(error.message.includes('migration guide'))
+  }
+})
+
 test('the serializer factory of the schema controller is rejected at boot', t => {
   t.plan(2)
 

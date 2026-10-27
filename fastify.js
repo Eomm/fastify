@@ -77,7 +77,8 @@ const {
   FST_ERR_ERROR_HANDLER_ALREADY_SET,
   FST_ERR_ROUTE_METHOD_INVALID,
   FST_ERR_ROUTE_METHOD_ALREADY_SUPPORTED,
-  FST_ERR_SERIALIZER_COMPILER_REMOVED
+  FST_ERR_SERIALIZER_COMPILER_REMOVED,
+  FST_ERR_BUILD_VALIDATOR_RENAMED
 } = errorCodes
 
 const { buildErrorHandler } = require('./lib/error-handler.js')
@@ -914,6 +915,12 @@ function processOptions (options, defaultRoute, onBadUrl, onMaxParamLength) {
     // The serializer factory is gone with `fast-json-stringify`: its use is a
     // hard error, never a silent fallback.
     throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('compilersFactory.buildSerializer')
+  }
+
+  if (options.compilersFactory && options.compilersFactory.buildValidator) {
+    // The key of the input factory has been renamed in Fastify v6: the old
+    // key is a hard error, never a silent fallback.
+    throw new FST_ERR_BUILD_VALIDATOR_RENAMED()
   }
 
   validateBodyLimitOption(options.bodyLimit)

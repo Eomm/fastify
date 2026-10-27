@@ -151,7 +151,7 @@ declare namespace fastify {
         getSchemas(): Record<string, unknown>;
       };
       compilersFactory?: {
-        buildValidator?: ValidatorFactory;
+        buildInputValidator?: ValidatorFactory;
         buildOutputValidator?: BuildCompilerFromPool;
       };
       outputValidatorOptions?: FastifyOutputValidatorOptions;

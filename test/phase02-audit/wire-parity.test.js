@@ -797,7 +797,6 @@ test('the transform resolves the member of a composition that references another
       },
       allOf: [
         {
-          $id: 'urn:base',
           $defs: { own: { type: 'string' }, other: { type: 'string' } },
           type: 'object',
           properties: { a: { type: 'string' } },
@@ -808,6 +807,165 @@ test('the transform resolves the member of a composition that references another
       additionalProperties: false
     },
     'the entries of a sibling container that declare no identifier are merged'
+  )
+
+  // The copy of a local definition does not carry the identifier of the
+  // definition: the copy is embedded in the scope of the document that holds
+  // the composition, and the identifier would be declared twice (the
+  // validator refuses a schema that resolves an identifier to two different
+  // schemas).
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: {
+          $id: 'urn:base',
+          type: 'object',
+          properties: { a: { type: 'string' } }
+        }
+      },
+      allOf: [
+        { $ref: '#/$defs/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    }),
+    {
+      $defs: {
+        base: {
+          $id: 'urn:base',
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: false
+        }
+      },
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { a: true, b: true },
+      additionalProperties: false
+    },
+    'the copy of a local definition does not carry its identifier'
+  )
+
+  // The pointers of the copy of a local definition are rewritten to the
+  // pointer path of the definition in the root document: the copy lives in
+  // another scope, and a pointer would otherwise resolve against the root
+  // document and point at the wrong subschema.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: {
+          $id: 'urn:base',
+          $defs: { inner: { type: 'string' } },
+          type: 'object',
+          properties: { a: { $ref: '#/$defs/inner' } }
+        }
+      },
+      allOf: [{ $ref: '#/$defs/base' }]
+    }),
+    {
+      $defs: {
+        base: {
+          $id: 'urn:base',
+          $defs: { inner: { type: 'string' } },
+          type: 'object',
+          properties: { a: { $ref: '#/$defs/inner' } },
+          additionalProperties: false
+        }
+      },
+      allOf: [
+        {
+          $defs: { inner: { type: 'string' } },
+          type: 'object',
+          properties: { a: { $ref: '#/$defs/base/$defs/inner' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the pointers of the copy of a local definition are rewritten'
+  )
+
+  // The copy of a local definition does not carry the identifier of a
+  // nested definition either: the nested definition keeps it, and it is
+  // declared once in the scope of the document.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          $defs: { inner: { $id: 'urn:inner', type: 'string' } }
+        }
+      },
+      allOf: [{ $ref: '#/$defs/base' }]
+    }),
+    {
+      $defs: {
+        base: {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          $defs: { inner: { $id: 'urn:inner', type: 'string' } },
+          additionalProperties: false
+        }
+      },
+      allOf: [
+        {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          $defs: { inner: { type: 'string' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the copy of a local definition does not carry the identifier of a nested definition'
+  )
+
+  // The relative references of the copy of a local definition are resolved
+  // against the identifier of the scope the definition opens.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: {
+          $id: 'http://fastify.test/base',
+          type: 'object',
+          properties: {
+            nested: { $ref: 'other' },
+            absolute: { $ref: 'http://fastify.test/absolute' }
+          }
+        }
+      },
+      allOf: [{ $ref: '#/$defs/base' }]
+    }),
+    {
+      $defs: {
+        base: {
+          $id: 'http://fastify.test/base',
+          type: 'object',
+          properties: {
+            nested: { $ref: 'other' },
+            absolute: { $ref: 'http://fastify.test/absolute' }
+          },
+          additionalProperties: false
+        }
+      },
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            nested: { $ref: 'http://fastify.test/other' },
+            absolute: { $ref: 'http://fastify.test/absolute' }
+          },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true, absolute: true },
+      additionalProperties: false
+    },
+    'the relative references of the copy of a local definition are resolved'
   )
 
   // An identifier that the scope declares once is not a duplicate: the entry
@@ -1146,6 +1304,101 @@ test('a composition whose member carries its own identifier keeps the properties
       }
     }
   }, async () => ({ a: 'x', b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member references a local definition that carries an identifier is built', async (t) => {
+  // The copy of the local definition is embedded in the scope of the
+  // document: it must not carry the identifier of the definition, or the
+  // identifier would be declared twice and the route would not build at all
+  // (`FST_ERR_SCH_SERIALIZATION_BUILD`).
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $defs: {
+            base: { $id: 'urn:base', type: 'object', properties: { a: { type: 'string' } } }
+          },
+          allOf: [
+            { $ref: '#/$defs/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member references a local definition that carries a nested identifier is built', async (t) => {
+  // The identifier of a nested definition belongs to the nested definition
+  // too: the copy of the local definition must not carry it, or the
+  // identifier would be declared twice.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $defs: {
+            base: {
+              type: 'object',
+              properties: { a: { type: 'string' } },
+              $defs: { inner: { $id: 'urn:inner', type: 'string' } }
+            }
+          },
+          allOf: [
+            { $ref: '#/$defs/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member references a local definition that carries a pointer is built', async (t) => {
+  // The pointer of the copy of the local definition is rewritten to the
+  // pointer path of the definition in the document: the copy lives in
+  // another scope, and the pointer would otherwise resolve against the root
+  // document and point at the wrong subschema.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $defs: {
+            base: {
+              $id: 'urn:base',
+              $defs: { inner: { type: 'string' } },
+              type: 'object',
+              properties: { a: { $ref: '#/$defs/inner' } }
+            }
+          },
+          allOf: [
+            { $ref: '#/$defs/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
 
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)

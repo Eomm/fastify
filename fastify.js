@@ -48,6 +48,7 @@ const { Hooks, hookRunnerApplication, supportedHooks } = require('./lib/hooks')
 const { createChildLogger, defaultChildLoggerFactory, createLogger, createLogController, LogController } = require('./lib/logger-factory')
 const pluginUtils = require('./lib/plugin-utils.js')
 const { getGenReqId, reqIdGenFactory } = require('./lib/req-id-gen-factory.js')
+const { FSTDEP026 } = require('./lib/warnings')
 const { buildRouting, validateBodyLimitOption, buildRouterOptions } = require('./lib/route')
 const build404 = require('./lib/four-oh-four')
 const getSecuredInitialConfig = require('./lib/initial-config-validation.js')
@@ -929,6 +930,14 @@ function processOptions (options, defaultRoute, onBadUrl, onMaxParamLength) {
   const genReqId = reqIdGenFactory(requestIdHeader, options.genReqId)
   options.bodyLimit = options.bodyLimit || defaultInitOptions.bodyLimit
 
+  // The top-level `ajv` option is deprecated in Fastify v6: it still works,
+  // but it emits the deprecation warning once per server and it will be
+  // removed in a future release. The replacement is the
+  // `schemaController.inputValidatorOptions` option.
+  // The option is *used* when the user provided it: an own property whose
+  // value is not `undefined`.
+  const usesDeprecatedAjvOption = Object.hasOwn(options, 'ajv') && options.ajv !== undefined
+
   const ajvOptions = Object.assign({
     customOptions: {},
     plugins: []
@@ -939,6 +948,12 @@ function processOptions (options, defaultRoute, onBadUrl, onMaxParamLength) {
   }
   if (!ajvOptions.plugins || !Array.isArray(ajvOptions.plugins)) {
     throw new FST_ERR_AJV_CUSTOM_OPTIONS_OPT_NOT_ARR(typeof ajvOptions.plugins)
+  }
+
+  if (usesDeprecatedAjvOption) {
+    // The warning is emitted once, here: `processOptions` runs once per
+    // `Fastify()` call, never per route and never per request.
+    FSTDEP026()
   }
 
   const { logger, hasLogger } = createLogger(options)

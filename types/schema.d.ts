@@ -56,6 +56,20 @@ export type FastifyOutputValidatorOptions =
     ? (Options extends { mode: 'JTD' } ? never : Options)
     : never
 
+/**
+ * The options of the input validator pool.
+ *
+ * The input side and the output side are configured in the same place: the
+ * `schemaController.inputValidatorOptions` option configures the pool of the
+ * input side, the `schemaController.outputValidatorOptions` option configures
+ * the pool of the output side.
+ *
+ * The type is the one of the options of the pool builder
+ * (`@fastify/ajv-compiler`): the configuration of the deprecated top-level
+ * `ajv` server option can be moved as it is.
+ */
+export type FastifyInputValidatorOptions = Parameters<BuildCompilerFromPool>[1]
+
 export interface FastifySchemaControllerOptions {
   bucket?: (parentSchemas?: unknown) => {
     add(schema: unknown): FastifyInstance;
@@ -67,6 +81,7 @@ export interface FastifySchemaControllerOptions {
     buildOutputValidator?: BuildCompilerFromPool;
   };
   outputValidatorOptions?: FastifyOutputValidatorOptions;
+  inputValidatorOptions?: FastifyInputValidatorOptions;
 }
 
 export type SchemaErrorDataVar = 'body' | 'headers' | 'params' | 'querystring' | 'response'

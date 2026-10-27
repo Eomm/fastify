@@ -578,7 +578,9 @@ test('the schema controller input validator options configure the input pool', a
   const fastify = Fastify({
     schemaController: {
       inputValidatorOptions: {
-        // The default pool coerces the arrays only: a scalar is not coerced.
+        // The option states the coercion of the scalars explicitly: the
+        // default pool of the framework uses `coerceTypes: 'array'`, which
+        // coerces them too.
         customOptions: { coerceTypes: true }
       }
     }

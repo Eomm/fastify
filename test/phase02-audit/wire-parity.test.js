@@ -674,6 +674,213 @@ test('the transform resolves the member of a composition that references another
     'the properties of the member are merged with the properties of the referenced schema'
   )
 
+  // The containers that hold the resources of a scope (`$defs`,
+  // `definitions`, `dependentSchemas`) are merged with the copy of the
+  // referenced schema, but the entries that declare an identifier are left
+  // out: the copy of the member lives in the scope of the document that
+  // embeds the composition, and the identifier would be declared twice — the
+  // validator refuses a schema that resolves an identifier to two different
+  // schemas ("reference \"...\" resolves to more than one schema").
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } } },
+        x: { $id: 'urn:x', type: 'string' }
+      },
+      allOf: [
+        { $ref: '#/$defs/base', $defs: { x: { $id: 'urn:x', type: 'string' } } },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    }),
+    {
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false },
+        x: { $id: 'urn:x', type: 'string' }
+      },
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { a: true, b: true },
+      additionalProperties: false
+    },
+    'the entries of a sibling container that declare an identifier are not copied'
+  )
+
+  // The entries of a sibling container that declare no identifier are merged
+  // with the copy of the referenced schema: the copy wins for an entry it
+  // already declares.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: {
+          $id: 'urn:base',
+          $defs: { own: { type: 'string' } },
+          type: 'object',
+          properties: { a: { type: 'string' } }
+        }
+      },
+      allOf: [
+        {
+          $ref: '#/$defs/base',
+          $defs: { own: { type: 'number' }, other: { type: 'string' } }
+        }
+      ]
+    }),
+    {
+      $defs: {
+        base: {
+          $id: 'urn:base',
+          $defs: { own: { type: 'string' } },
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: false
+        }
+      },
+      allOf: [
+        {
+          $id: 'urn:base',
+          $defs: { own: { type: 'string' }, other: { type: 'string' } },
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the entries of a sibling container that declare no identifier are merged'
+  )
+
+  // An identifier that the scope declares once is not a duplicate: the entry
+  // that declares it is copied into the copy of the referenced schema, and
+  // the identifier stays declared once in the scope of the document.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        {
+          $ref: '#/$defs/base',
+          $defs: {
+            nested: { $defs: { inner: { $id: 'urn:inner', type: 'string' } } },
+            tuple: { prefixItems: [{ $id: 'urn:item', type: 'string' }] },
+            flag: true
+          }
+        }
+      ]
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      allOf: [
+        {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: true,
+          $defs: {
+            nested: { $defs: { inner: { $id: 'urn:inner', type: 'string' } } },
+            tuple: { prefixItems: [{ $id: 'urn:item', type: 'string' }] },
+            flag: true
+          }
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the entries that declare an identifier the scope declares once are copied'
+  )
+
+  // An identifier that the scope declares more than once is a duplicate: the
+  // entry that declares it is not copied, or the copy would declare the
+  // identifier a second time.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } } },
+        inner: { $id: 'urn:inner', type: 'string' },
+        item: { $id: 'urn:item', type: 'string' }
+      },
+      allOf: [
+        {
+          $ref: '#/$defs/base',
+          $defs: {
+            nested: { $defs: { inner: { $id: 'urn:inner', type: 'string' } } },
+            tuple: { prefixItems: [{ $id: 'urn:item', type: 'string' }] }
+          }
+        }
+      ]
+    }),
+    {
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false },
+        inner: { $id: 'urn:inner', type: 'string' },
+        item: { $id: 'urn:item', type: 'string' }
+      },
+      allOf: [
+        {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'an entry that declares a duplicated identifier is not copied'
+  )
+
+  // The other containers that hold the resources of a scope are merged as
+  // well: their entries declare no identifier, and a constraint they carry
+  // must stay effective.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        {
+          $ref: '#/$defs/base',
+          definitions: { legacy: { type: 'string' } },
+          dependentSchemas: { a: { required: ['b'] } }
+        }
+      ]
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      allOf: [
+        {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: true,
+          definitions: { legacy: { type: 'string' } },
+          dependentSchemas: { a: { required: ['b'] } }
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the sibling containers that declare no identifier are merged'
+  )
+
+  // A sibling container that carries no map at all is ignored: the copy of
+  // the referenced schema is not given an empty container.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/$defs/base', $defs: null },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { a: true, b: true },
+      additionalProperties: false
+    },
+    'a sibling container that carries no map is ignored'
+  )
+
   // The `then` branch of an `if`/`then` composition is replaced too.
   t.assert.deepStrictEqual(
     applyFjsObjectParity({
@@ -852,6 +1059,85 @@ test('a composition whose member carries its own identifier keeps the properties
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member carries a reference and a sibling container is built', async (t) => {
+  // The copy of the referenced schema replaces the member of the composition
+  // and it lives in the scope of the document: the entries of a sibling
+  // container that declare an identifier are not copied into it, or the
+  // identifier would be declared twice and the route would not build at all
+  // (`FST_ERR_SCH_SERIALIZATION_BUILD`).
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $defs: {
+            base: { type: 'object', properties: { a: { type: 'string' } } },
+            x: { $id: 'urn:x', type: 'string' }
+          },
+          allOf: [
+            { $ref: '#/$defs/base', $defs: { x: { $id: 'urn:x', type: 'string' } } },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a member that carries a reference and a sibling keyword still constrains the payload', async (t) => {
+  // The keywords that the member carries next to its reference are kept: the
+  // copy of the referenced schema does not replace them, or the payload would
+  // not be constrained any more.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/required', {
+    schema: {
+      response: {
+        200: {
+          $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+          allOf: [
+            {
+              $ref: '#/$defs/base',
+              required: ['b']
+            }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x' }))
+
+  fastify.get('/dependent', {
+    schema: {
+      response: {
+        200: {
+          $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+          allOf: [
+            {
+              $ref: '#/$defs/base',
+              dependencies: { a: { required: ['b'] } }
+            }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x' }))
+
+  const response = await request(t, fastify, '/required')
+  t.assert.strictEqual(response.statusCode, 500)
+  t.assert.strictEqual(response.json().code, 'FST_ERR_OUTPUT_VALIDATION')
+
+  const dependent = await request(t, fastify, '/dependent')
+  t.assert.strictEqual(dependent.statusCode, 500)
+  t.assert.strictEqual(dependent.json().code, 'FST_ERR_OUTPUT_VALIDATION')
 })
 
 test('a composition whose member carries an unresolvable reference does not compile', async (t) => {

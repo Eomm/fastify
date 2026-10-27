@@ -294,6 +294,21 @@ const PARITY_MATRIX = [
     fjs: '{"a":"x","z":3,"b":2}'
   },
   {
+    name: 'a composition whose member carries a reference and a sibling container keeps both members',
+    schema: {
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } } },
+        x: { $id: 'urn:x', type: 'string' }
+      },
+      allOf: [
+        { $ref: '#/$defs/base', $defs: { x: { $id: 'urn:x', type: 'string' } } },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2, c: true },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
     name: 'a schema that declares only propertyNames keeps every property',
     schema: { propertyNames: { pattern: '^a' } },
     payload: { a: 1 },

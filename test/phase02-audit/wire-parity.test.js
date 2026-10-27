@@ -313,6 +313,230 @@ test('the transform resolves the member of a composition that references another
     'the shared document is copied into the composition and its references are rebased'
   )
 
+  // The references of a shared document are resolved against the rules of
+  // RFC 3986: a root relative reference is resolved against the root of the
+  // authority of the base, and the dot segments of a reference are removed.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test': {
+            $id: 'http://fastify.test',
+            type: 'object',
+            properties: { nested: { $ref: '/other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'http://fastify.test/other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a root relative reference is resolved against the root of the authority of the base'
+  )
+
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test/dir/base' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test/dir/base': {
+            $id: 'http://fastify.test/dir/base',
+            type: 'object',
+            properties: { nested: { $ref: '/other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'http://fastify.test/other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a root relative reference is resolved against the root of the authority of a base that carries a path'
+  )
+
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test/dir/base' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test/dir/base': {
+            $id: 'http://fastify.test/dir/base',
+            type: 'object',
+            properties: { nested: { $ref: '../other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'http://fastify.test/other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'the dot segments of a reference are removed'
+  )
+
+  // A network path reference keeps the authority of the base: it can never
+  // resolve (see the known limitations of the module).
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test/base' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test/base': {
+            $id: 'http://fastify.test/base',
+            type: 'object',
+            properties: { nested: { $ref: '//other.test/x' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'http://fastify.test///other.test/x' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a network path reference keeps the authority of the base'
+  )
+
+  // A base that the URL parser cannot resolve keeps the form of the
+  // references: a relative base merges them with its own path, and a base
+  // that carries no path keeps them as they are.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'dir/base' }] },
+      {
+        sharedDocuments: {
+          'dir/base': {
+            $id: 'dir/base',
+            type: 'object',
+            properties: { nested: { $ref: 'other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'dir/other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a relative base merges the reference with its own path'
+  )
+
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'urn:base' }] },
+      {
+        sharedDocuments: {
+          'urn:base': {
+            $id: 'urn:base',
+            type: 'object',
+            properties: { nested: { $ref: 'other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a base that carries no path keeps the reference as it is'
+  )
+
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'base' }] },
+      {
+        sharedDocuments: {
+          base: {
+            $id: 'base',
+            type: 'object',
+            properties: { nested: { $ref: '//other.test/x' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: '//other.test/x' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a network path reference against a base that carries no authority is kept as it is'
+  )
+
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'base' }] },
+      {
+        sharedDocuments: {
+          base: {
+            $id: 'base',
+            type: 'object',
+            properties: { nested: { $ref: '' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'base' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'an empty reference resolves to the base itself'
+  )
+
   // A member that references a subschema of a shared document is copied too.
   t.assert.deepStrictEqual(
     applyFjsObjectParity(
@@ -1283,6 +1507,80 @@ test('a composition whose member references a shared document that carries no pa
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"nested":"s","b":2}')
+})
+
+test('a composition whose member references a shared document that carries a root relative reference is built', async (t) => {
+  // The root relative reference of the source document is resolved against
+  // the root of the authority of its base (`http://fastify.test/other`),
+  // and never against the directory of the base
+  // (`http://fastify.test//other`), or the validator cannot resolve it at
+  // all.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test',
+    type: 'object',
+    properties: { nested: { $ref: '/other' } }
+  })
+  fastify.addSchema({
+    $id: 'http://fastify.test/other',
+    type: 'object',
+    properties: { deep: { type: 'string' } }
+  })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'http://fastify.test' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ nested: { deep: 's' }, b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":{"deep":"s"},"b":2}')
+})
+
+test('a composition whose member references a shared document that carries a dot segment reference is built', async (t) => {
+  // The dot segments of the reference of the source document are removed
+  // (`http://fastify.test/dir/base` + `../other` is
+  // `http://fastify.test/other`), exactly like the rules of RFC 3986 do.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test/dir/base',
+    type: 'object',
+    properties: { nested: { $ref: '../other' } }
+  })
+  fastify.addSchema({
+    $id: 'http://fastify.test/other',
+    type: 'object',
+    properties: { deep: { type: 'string' } }
+  })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'http://fastify.test/dir/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ nested: { deep: 's' }, b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":{"deep":"s"},"b":2}')
 })
 
 test('a composition whose member carries its own identifier keeps the properties of every member', async (t) => {

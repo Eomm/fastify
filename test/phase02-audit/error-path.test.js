@@ -396,6 +396,60 @@ test('an error body shaped by a composed error schema keeps the status code and 
   t.assert.strictEqual(response.payload, '{"statusCode":500,"message":"boom"}')
 })
 
+test('an error body shaped by a composed error schema that references a definition keeps the status code and the message', async (t) => {
+  // The error path is shaped by the same parity layer as the response path:
+  // a composed error schema whose member references a definition must not
+  // empty the error body.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        500: {
+          $defs: { base: { type: 'object', properties: { statusCode: { type: 'number' } } } },
+          allOf: [
+            { $ref: '#/$defs/base' },
+            { type: 'object', properties: { message: { type: 'string' } } }
+          ]
+        }
+      }
+    }
+  }, async () => {
+    throw new Error('boom')
+  })
+
+  const response = await fastify.inject('/')
+  t.assert.strictEqual(response.statusCode, 500)
+  t.assert.strictEqual(response.payload, '{"statusCode":500,"message":"boom"}')
+})
+
+test('an error body shaped by a composed error schema that references a shared document keeps the status code and the message', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({ $id: 'base-error', type: 'object', properties: { statusCode: { type: 'number' } } })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        500: {
+          allOf: [
+            { $ref: 'base-error' },
+            { type: 'object', properties: { message: { type: 'string' } } }
+          ]
+        }
+      }
+    }
+  }, async () => {
+    throw new Error('boom')
+  })
+
+  const response = await fastify.inject('/')
+  t.assert.strictEqual(response.statusCode, 500)
+  t.assert.strictEqual(response.payload, '{"statusCode":500,"message":"boom"}')
+})
+
 test('an error body shaped by a patternProperties error schema keeps the matching properties only', async (t) => {
   const fastify = Fastify()
   t.after(() => fastify.close())

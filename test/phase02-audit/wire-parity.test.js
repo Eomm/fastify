@@ -250,6 +250,340 @@ test('the transform leaves the schemas that are not object schemas alone', async
   )
 })
 
+test('the transform resolves the member of a composition that references another schema', async (t) => {
+  // A member that references a definition of the document is copied into the
+  // composition: the merge knows the properties it declares, and the copy
+  // does not remove the properties of the other members.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/$defs/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { a: true, b: true },
+      additionalProperties: false
+    },
+    'the referenced definition is copied into the composition'
+  )
+
+  // A member that references a shared document is copied too: the copy does
+  // not carry the identifier of the document (the document is registered
+  // once, in the pool of the output side) and the references that are local
+  // to the document are rebased.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      {
+        allOf: [
+          { $ref: 'base' },
+          { type: 'object', properties: { b: { type: 'number' } } }
+        ]
+      },
+      {
+        sharedDocuments: {
+          base: {
+            $id: 'base',
+            $defs: { inner: { type: 'object', properties: { deep: { type: 'string' } } } },
+            type: 'object',
+            properties: { nested: { $ref: '#/$defs/inner' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          $defs: { inner: { type: 'object', properties: { deep: { type: 'string' } }, additionalProperties: false } },
+          type: 'object',
+          properties: { nested: { $ref: 'base#/$defs/inner' } },
+          additionalProperties: true
+        },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { nested: true, b: true },
+      additionalProperties: false
+    },
+    'the shared document is copied into the composition and its references are rebased'
+  )
+
+  // A member that references a subschema of a shared document is copied too.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'base#/$defs/x' }] },
+      {
+        sharedDocuments: {
+          base: { $id: 'base', $defs: { x: { type: 'object', properties: { a: { type: 'string' } } } } }
+        }
+      }
+    ),
+    {
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'a fragment of a shared document is copied into the composition'
+  )
+
+  // A member that references a nested identifier of a shared document is
+  // copied too: the nested identifiers are indexed.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'nested' }] },
+      {
+        sharedDocuments: {
+          base: {
+            $id: 'base',
+            $defs: { inner: { $id: 'nested', type: 'object', properties: { a: { type: 'string' } } } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'a nested identifier of a shared document is resolved'
+  )
+
+  // A shared document that is embedded in the composition is resolved
+  // through the index of the shared documents.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $id: 'base', type: 'object', properties: { a: { type: 'string' } } }] },
+      { sharedDocuments: { base: { $id: 'base', type: 'object', properties: { a: { type: 'string' } } } } }
+    ),
+    {
+      allOf: [
+        { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'an embedded shared document is copied into the composition'
+  )
+
+  // A member whose reference cannot be resolved leaves the composition
+  // without an `additionalProperties`: the parity layer never removes a
+  // property it cannot prove to be extra.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      allOf: [
+        { $ref: 'nowhere' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    }),
+    {
+      allOf: [
+        { $ref: 'nowhere' },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { b: true }
+    },
+    'an unresolvable reference leaves the composition open'
+  )
+
+  // A reference that is not a schema (a boolean one) is not resolved.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { flag: true },
+      allOf: [{ $ref: '#/$defs/flag' }]
+    }),
+    {
+      $defs: { flag: true },
+      allOf: [{ $ref: '#/$defs/flag' }]
+    },
+    'a boolean reference is not resolved'
+  )
+
+  // A malformed reference is not resolved.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { list: [{ type: 'object' }] },
+      allOf: [{ $ref: '#not-a-pointer' }, { $ref: '#/$defs/list' }]
+    }),
+    {
+      $defs: { list: [{ type: 'object', additionalProperties: false }] },
+      allOf: [{ $ref: '#not-a-pointer' }, { $ref: '#/$defs/list' }]
+    },
+    'a malformed reference is not resolved'
+  )
+
+  // A reference that points to something that is not a schema is not
+  // resolved, and neither is a malformed reference to a shared document.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'base#not-a-pointer' }, { $ref: 'base#/$defs/list' }] },
+      { sharedDocuments: { base: { $id: 'base', $defs: { list: [{ type: 'object' }] } } } }
+    ),
+    {
+      allOf: [{ $ref: 'base#not-a-pointer' }, { $ref: 'base#/$defs/list' }]
+    },
+    'a malformed reference to a shared document is not resolved'
+  )
+
+  // A reference that walks into a value that is not a schema is not
+  // resolved.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [{ $ref: '#/$defs/base/properties/a/type/extra' }, { $ref: '#/$defs/missing' }]
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      allOf: [{ $ref: '#/$defs/base/properties/a/type/extra' }, { $ref: '#/$defs/missing' }]
+    },
+    'a reference that walks into a value is not resolved'
+  )
+
+  // A shared document that carries an absolute identifier and a nested one
+  // rebases the references of its copy.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test/base' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test/base': {
+            $id: 'http://fastify.test/base',
+            $defs: { inner: { $id: 'sub', type: 'object', properties: { a: { type: 'string' } } } },
+            allOf: [{ type: 'object', properties: { nested: { $ref: '#/$defs/inner' } } }]
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          $defs: { inner: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+          allOf: [
+            {
+              type: 'object',
+              properties: { nested: { $ref: 'http://fastify.test/base#/$defs/inner' } },
+              additionalProperties: true
+            }
+          ],
+          additionalProperties: true,
+          properties: { nested: true }
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'the nested identifier of a shared document is rebased'
+  )
+
+  // A circular reference is not resolved: the transform does not loop.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        a: { allOf: [{ $ref: '#/$defs/b' }] },
+        b: { allOf: [{ $ref: '#/$defs/a' }] }
+      },
+      allOf: [{ $ref: '#/$defs/a' }]
+    }),
+    {
+      $defs: {
+        a: { allOf: [{ allOf: [{ allOf: [{ $ref: '#/$defs/b' }] }] }] },
+        b: { allOf: [{ allOf: [{ allOf: [{ $ref: '#/$defs/a' }] }] }] }
+      },
+      allOf: [{ allOf: [{ allOf: [{ $ref: '#/$defs/a' }] }] }]
+    },
+    'a circular reference is not resolved'
+  )
+
+  // The `then` branch of an `if`/`then` composition is replaced too.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      if: { properties: { kind: { const: 'a' } }, required: ['kind'] },
+      then: { $ref: '#/$defs/base' }
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      if: { properties: { kind: { const: 'a' } }, required: ['kind'] },
+      then: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true },
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the then branch of an if/then composition is resolved'
+  )
+
+  // The `else` branch of an `if`/`else` composition is replaced too.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      if: { properties: { kind: { const: 'a' } }, required: ['kind'] },
+      else: { $ref: '#/$defs/base' }
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      if: { properties: { kind: { const: 'a' } }, required: ['kind'] },
+      else: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: true },
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the else branch of an if/else composition is resolved'
+  )
+})
+
+test('a composition whose member references a definition keeps the properties of both members', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+          allOf: [
+            { $ref: '#/$defs/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a composition whose member references a shared document keeps the properties of both members', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({ $id: 'base', type: 'object', properties: { a: { type: 'string' } } })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ a: 'x', b: 2, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
 test('the properties are emitted in the order of the payload, not in the order of the schema', async (t) => {
   const fastify = Fastify()
   t.after(() => fastify.close())

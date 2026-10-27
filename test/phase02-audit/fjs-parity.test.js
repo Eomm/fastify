@@ -196,6 +196,79 @@ const PARITY_MATRIX = [
     payload: { a: 'x' },
     fjs: '{"a":"x"}',
     divergences: ['response-validation']
+  },
+  {
+    name: 'a composition whose member references a local definition keeps the properties of both members',
+    schema: {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/$defs/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
+    name: 'a composition whose member references a local definition drops the properties that no member declares',
+    schema: {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/$defs/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2, c: true },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
+    name: 'a composition whose member references a legacy definition keeps the properties of both members',
+    schema: {
+      definitions: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/definitions/base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
+    name: 'a composition of a single member that references a definition keeps the properties of the definition',
+    schema: {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [{ $ref: '#/$defs/base' }]
+    },
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x"}'
+  },
+  {
+    name: 'a composition whose member references a shared document keeps the properties of both members',
+    schema: {
+      allOf: [
+        { $ref: 'base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    externalSchemas: [
+      { $id: 'base', type: 'object', properties: { a: { type: 'string' } } }
+    ],
+    payload: { a: 'x', b: 2 },
+    fjs: '{"a":"x","b":2}'
+  },
+  {
+    name: 'a composition whose member references a shared document drops the properties that no member declares',
+    schema: {
+      allOf: [
+        { $ref: 'base' },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    },
+    externalSchemas: [
+      { $id: 'base', type: 'object', properties: { a: { type: 'string' } } }
+    ],
+    payload: { a: 'x', b: 2, c: true },
+    fjs: '{"a":"x","b":2}'
   }
 ]
 
@@ -324,10 +397,19 @@ function assertOutputValidationError (condition) {
 
 test('the wire bytes are the bytes of fast-json-stringify', async (t) => {
   for (const entry of PARITY_MATRIX) {
-    const reference = build(entry.schema)(entry.payload)
+    const externalSchemas = entry.externalSchemas || []
+    const reference = externalSchemas.length > 0
+      ? build(
+        entry.schema,
+        { schema: Object.fromEntries(externalSchemas.map(document => [document.$id, document])) }
+      )(entry.payload)
+      : build(entry.schema)(entry.payload)
     t.assert.strictEqual(reference, entry.fjs, `the fjs reference of "${entry.name}"`)
 
     const fastify = Fastify()
+    for (const document of externalSchemas) {
+      fastify.addSchema(document)
+    }
     fastify.get('/', {
       schema: { response: { 200: entry.schema } }
     }, async () => entry.payload)

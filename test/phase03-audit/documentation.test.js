@@ -30,6 +30,10 @@ const reference = readFileSync(
   resolve(__dirname, '../../docs/Reference/Validation-and-Serialization.md'),
   'utf8'
 )
+const server = readFileSync(
+  resolve(__dirname, '../../docs/Reference/Server.md'),
+  'utf8'
+)
 
 /**
  * Extracts the code block that follows an anchor of a document.
@@ -74,6 +78,30 @@ function codeBlocks (document) {
  */
 function proseOf (document) {
   return document.replace(/```[\s\S]*?```/g, '')
+}
+
+/**
+ * Extracts the section of a code block that configures an option.
+ *
+ * The section starts at the line that declares the option and ends at the
+ * next line that declares another option of the same level.
+ *
+ * @param {string} block the code block
+ * @param {string} property the name of the option
+ * @returns {string} the content of the section, the empty string when the
+ *   block does not configure the option
+ */
+function optionSection (block, property) {
+  const declaration = new RegExp(`^ {4}${property}:`, 'm')
+  const start = block.search(declaration)
+  if (start === -1) {
+    return ''
+  }
+  const rest = block.slice(start)
+  // The first line is skipped: the declaration itself must not end the
+  // section.
+  const end = rest.slice(1).search(/^ {4}\w/m)
+  return end === -1 ? rest : rest.slice(0, end + 1)
 }
 
 test('the V5 to V6 migration guide exists and is not empty', (t) => {
@@ -182,5 +210,28 @@ test('the reference document describes the two option families and the error pat
 
   for (const surface of surfaces) {
     t.assert.ok(reference.includes(surface), surface)
+  }
+})
+
+test('the server reference publishes the default of the output pool of the runtime', (t) => {
+  // The output pool of the runtime is configured with `removeAdditional:
+  // true` and the parity layer shapes the payload. The value `'all'` is a
+  // valid choice for the **input** pool, whose options the user configures:
+  // it must not be published as the default of the output side.
+  const sections = codeBlocks(server)
+    .map((block) => optionSection(block, 'outputValidatorOptions'))
+    .filter((section) => section !== '')
+
+  t.assert.ok(sections.length > 0, 'the server reference has no output pool example')
+
+  for (const section of sections) {
+    t.assert.ok(
+      !section.includes("removeAdditional: 'all'"),
+      'the server reference configures the output pool with a default that the runtime does not use'
+    )
+    t.assert.ok(
+      section.includes('removeAdditional: true'),
+      'the server reference does not publish the default of the output pool'
+    )
   }
 })

@@ -523,6 +523,64 @@ test('the transform resolves the member of a composition that references another
     'the relative references of a shared document are rebased'
   )
 
+  // A base that carries an authority but no path resolves a relative
+  // reference against the root of that authority: the resolved reference can
+  // never point at another host than the base.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test': {
+            $id: 'http://fastify.test',
+            type: 'object',
+            properties: { nested: { $ref: 'other' } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { nested: { $ref: 'http://fastify.test/other' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { nested: true },
+      additionalProperties: false
+    },
+    'a relative reference is resolved against the root of the authority of the base'
+  )
+
+  // The nested identifier of a document that carries an authority but no path
+  // is resolved against the root of that authority too.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity(
+      { allOf: [{ $ref: 'http://fastify.test/sub' }] },
+      {
+        sharedDocuments: {
+          'http://fastify.test': {
+            $id: 'http://fastify.test',
+            $defs: { inner: { $id: 'sub', type: 'object', properties: { a: { type: 'string' } } } }
+          }
+        }
+      }
+    ),
+    {
+      allOf: [
+        {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { a: true },
+      additionalProperties: false
+    },
+    'the nested identifier of a document that carries no path is resolved against the root of its authority'
+  )
+
   // A shared document that is indexed under another identifier than its own
   // keeps the identifier of the document as the base of its references.
   t.assert.deepStrictEqual(
@@ -1024,6 +1082,39 @@ test('a composition whose member references a shared document that references an
         200: {
           allOf: [
             { $ref: 'http://fastify.test/base' },
+            { type: 'object', properties: { b: { type: 'number' } } }
+          ]
+        }
+      }
+    }
+  }, async () => ({ nested: 's', b: 2 }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{"nested":"s","b":2}')
+})
+
+test('a composition whose member references a shared document that carries no path keeps the properties of both members', async (t) => {
+  // The base of the source document carries an authority but no path: the
+  // relative reference it carries must be resolved against the root of that
+  // authority (`http://fastify.test/other`), and never against another host
+  // (`http://other`), or the validator cannot resolve it at all.
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.addSchema({
+    $id: 'http://fastify.test',
+    type: 'object',
+    properties: { nested: { $ref: 'other' } }
+  })
+  fastify.addSchema({ $id: 'http://fastify.test/other', type: 'string' })
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: {
+          allOf: [
+            { $ref: 'http://fastify.test' },
             { type: 'object', properties: { b: { type: 'number' } } }
           ]
         }

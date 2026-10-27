@@ -598,6 +598,82 @@ test('the transform resolves the member of a composition that references another
     'a shared document that could not be resolved is left alone'
   )
 
+  // The keywords that a member carries next to its reference are kept: a
+  // reference does not replace them.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } } } },
+      allOf: [
+        { $ref: '#/$defs/base', description: 'the base', properties: { z: { type: 'number' } } },
+        { type: 'object', properties: { b: { type: 'number' } } }
+      ]
+    }),
+    {
+      $defs: { base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false } },
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            a: { type: 'string' },
+            z: { type: 'number' }
+          },
+          additionalProperties: true,
+          description: 'the base'
+        },
+        { type: 'object', properties: { b: { type: 'number' } }, additionalProperties: true }
+      ],
+      properties: { a: true, z: true, b: true },
+      additionalProperties: false
+    },
+    'the keywords that the member carries next to its reference are kept'
+  )
+
+  // The properties that the member declares next to its reference are merged
+  // with the properties of the referenced schema: the referenced schema wins
+  // for a property it already declares.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } } },
+        broken: { type: 'object', properties: null }
+      },
+      allOf: [
+        { $ref: '#/$defs/base', properties: { a: { type: 'number' }, z: { type: 'number' } } },
+        { $ref: '#/$defs/broken', properties: { y: { type: 'number' } } },
+        { $ref: '#/$defs/base', properties: null }
+      ]
+    }),
+    {
+      $defs: {
+        base: { type: 'object', properties: { a: { type: 'string' } }, additionalProperties: false },
+        broken: { type: 'object', properties: null, additionalProperties: false }
+      },
+      allOf: [
+        {
+          type: 'object',
+          properties: {
+            a: { type: 'string' },
+            z: { type: 'number' }
+          },
+          additionalProperties: true
+        },
+        {
+          type: 'object',
+          properties: { y: { type: 'number' } },
+          additionalProperties: true
+        },
+        {
+          type: 'object',
+          properties: { a: { type: 'string' } },
+          additionalProperties: true
+        }
+      ],
+      properties: { a: true, z: true, y: true },
+      additionalProperties: false
+    },
+    'the properties of the member are merged with the properties of the referenced schema'
+  )
+
   // The `then` branch of an `if`/`then` composition is replaced too.
   t.assert.deepStrictEqual(
     applyFjsObjectParity({

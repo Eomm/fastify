@@ -434,7 +434,7 @@ Ensure the plugin is **compatible with the Ajv version shipped within Fastify**.
 > option. The top-level `ajv` server option still configures the same pool,
 > but it is deprecated in Fastify v6: it emits the `FSTDEP026` deprecation
 > warning. See the
-> [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for the
+> [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
 > details.
 
 ```js
@@ -544,7 +544,7 @@ it is deprecated in Fastify v6.
 > `compilersFactory.buildInputValidator` (the old key is a hard error at
 > startup, `FST_ERR_BUILD_VALIDATOR_RENAMED`) and the instance accessor
 > `fastify.validatorCompiler` is now `fastify.inputValidatorCompiler`. See the
-> [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for the
+> [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
 > details.
 
 ##### The two option families of the schema controller
@@ -1163,7 +1163,7 @@ and `reply.serializeInput()` helpers are removed as well, and the
 `FST_ERR_SERIALIZER_OPTS_REMOVED` error. The `reply.serialize(payload)` helper
 survives as an alias of `JSON.stringify(payload)`.
 
-See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for the
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
 one-line replacement of every removed
 symbol.
 
@@ -1241,7 +1241,7 @@ fastify.post('/', { schema, attachRequestValidation: true }, function (req, repl
 > renamed in Fastify v6 and it is **not** an alias: a route that still declares
 > it does not attach the validation errors, the framework answers the
 > validation error itself. See the
-> [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for the
+> [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
 > details.
 
 #### `schemaErrorFormatter`

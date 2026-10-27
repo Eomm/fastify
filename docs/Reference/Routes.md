@@ -58,7 +58,7 @@ fastify.route(options)
   schema validation error, instead of sending the error to the error handler.
   The default [error format](https://ajv.js.org/api.html#error-objects) is the
   Ajv one. The option was named `attachValidation` in v5: see the
-  [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md).
+  [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md).
 * `onRequest(request, reply, done)`: a [function](./Hooks.md#onrequest) called
   as soon as a request is received, it could also be an array of functions.
 * `preParsing(request, reply, payload, done)`: a
@@ -836,4 +836,4 @@ silently ignored.
 
 See the [Validation and Serialization](./Validation-and-Serialization.md#removed-in-v6)
 documentation for the whole list of the removed serialization APIs and the
-[V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md).
+[V5 to V6 migration guide](../Guides/Migration-Guide-V6.md).

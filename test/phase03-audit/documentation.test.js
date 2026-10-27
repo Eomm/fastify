@@ -19,7 +19,7 @@ const { resolve } = require('node:path')
  */
 
 const guide = readFileSync(
-  resolve(__dirname, '../../docs/Guides/Migration-Guide-V5-to-V6.md'),
+  resolve(__dirname, '../../docs/Guides/Migration-Guide-V6.md'),
   'utf8'
 )
 const guidesIndex = readFileSync(
@@ -109,7 +109,7 @@ test('the V5 to V6 migration guide exists and is not empty', (t) => {
 })
 
 test('the migration guide is listed in the index of the guides', (t) => {
-  t.assert.ok(guidesIndex.includes('Migration-Guide-V5-to-V6.md'))
+  t.assert.ok(guidesIndex.includes('Migration-Guide-V6.md'))
 })
 
 test('every entry of the migration guide states the old surface, the new surface and the action', (t) => {

@@ -311,5 +311,5 @@ validates and shapes the payload, and the payload is then serialized with the
 native `JSON.stringify()`. Only the serializer compiler of the providers is
 gone.
 
-See the [V5 to V6 migration guide](../Guides/Migration-Guide-V5-to-V6.md) for
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
 the details.

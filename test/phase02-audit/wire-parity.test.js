@@ -537,6 +537,42 @@ test('the transform resolves the member of a composition that references another
   )
 })
 
+test('a schema that describes an object without declaring the object type is an object schema', async (t) => {
+  // A union type (`type: ['object', 'null']`, the shape of a nullable
+  // response object) and the keywords that only make sense for an object
+  // describe an object: the rule 1 of the parity applies to them.
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ type: ['object', 'null'] }),
+    { type: ['object', 'null'], additionalProperties: false },
+    'a union type that carries the object type is an object schema'
+  )
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ type: ['string', 'null'] }),
+    { type: ['string', 'null'] },
+    'a union type that does not carry the object type is not an object schema'
+  )
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ minProperties: 1 }),
+    { minProperties: 1, additionalProperties: false },
+    'a schema that declares minProperties is an object schema'
+  )
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ maxProperties: 1 }),
+    { maxProperties: 1, additionalProperties: false },
+    'a schema that declares maxProperties is an object schema'
+  )
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ required: ['a'] }),
+    { required: ['a'], additionalProperties: false },
+    'a schema that declares required is an object schema'
+  )
+  t.assert.deepStrictEqual(
+    applyFjsObjectParity({ propertyNames: { pattern: '^a' } }),
+    { propertyNames: { pattern: '^a' }, additionalProperties: false },
+    'a schema that declares propertyNames is an object schema'
+  )
+})
+
 test('a composition whose member references a definition keeps the properties of both members', async (t) => {
   const fastify = Fastify()
   t.after(() => fastify.close())
@@ -582,6 +618,23 @@ test('a composition whose member references a shared document keeps the properti
   const response = await request(t, fastify, '/')
   t.assert.strictEqual(response.statusCode, 200)
   t.assert.strictEqual(response.payload, '{"a":"x","b":2}')
+})
+
+test('a nullable object schema answers an empty object', async (t) => {
+  const fastify = Fastify()
+  t.after(() => fastify.close())
+
+  fastify.get('/', {
+    schema: {
+      response: {
+        200: { type: ['object', 'null'] }
+      }
+    }
+  }, async () => ({ id: 1, extra: 'stripped' }))
+
+  const response = await request(t, fastify, '/')
+  t.assert.strictEqual(response.statusCode, 200)
+  t.assert.strictEqual(response.payload, '{}')
 })
 
 test('the properties are emitted in the order of the payload, not in the order of the schema', async (t) => {

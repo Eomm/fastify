@@ -269,6 +269,18 @@ const PARITY_MATRIX = [
     ],
     payload: { a: 'x', b: 2, c: true },
     fjs: '{"a":"x","b":2}'
+  },
+  {
+    name: 'a nullable object schema answers an empty object',
+    schema: { type: ['object', 'null'] },
+    payload: { id: 1, extra: 'kept?' },
+    fjs: '{}'
+  },
+  {
+    name: 'a schema that declares no property at all answers an empty object',
+    schema: { minProperties: 1 },
+    payload: { a: 1 },
+    fjs: '{}'
   }
 ]
 

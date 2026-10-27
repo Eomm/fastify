@@ -239,6 +239,8 @@ expect(fastify({
   }
 })).type.toBeAssignableTo<FastifyInstance>()
 expect(fastify({ return503OnClosing: true })).type.toBeAssignableTo<FastifyInstance>()
+// The deprecated top-level `ajv` option is still accepted by the type
+// declarations: it still works during the transitional v6 alpha.
 expect(fastify({
   ajv: {
     customOptions: {
@@ -248,26 +250,32 @@ expect(fastify({
   }
 })).type.toBeAssignableTo<FastifyInstance>()
 expect(fastify({
-  ajv: {
-    plugins: [[(ajv: Ajv): Ajv => ajv, ['keyword1', 'keyword2']]]
+  schemaController: {
+    inputValidatorOptions: {
+      plugins: [[(ajv: Ajv): Ajv => ajv, ['keyword1', 'keyword2']]]
+    }
   }
 })).type.toBeAssignableTo<FastifyInstance>()
 fastify({
-  ajv: {
-    customOptions: {
-      removeAdditional: 'all'
-    },
-    plugins: [
-      // @ts-expect-error  Type 'void' is not assignable to type 'Ajv'.
-      () => { }
-    ]
+  schemaController: {
+    inputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all'
+      },
+      plugins: [
+        // @ts-expect-error  Type 'void' is not assignable to type 'Ajv'.
+        () => { }
+      ]
+    }
   }
 })
 expect(fastify({
-  ajv: {
-    onCreate: (ajvInstance) => {
-      expect(ajvInstance).type.toBe<Ajv>()
-      return ajvInstance
+  schemaController: {
+    inputValidatorOptions: {
+      onCreate: (ajvInstance) => {
+        expect(ajvInstance).type.toBe<Ajv>()
+        return ajvInstance
+      }
     }
   }
 })).type.toBeAssignableTo<FastifyInstance>()

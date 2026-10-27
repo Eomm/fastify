@@ -106,9 +106,11 @@ test('Example - get schema encapsulated', async t => {
 test('Example - validation', (t, done) => {
   t.plan(1)
   const fastify = Fastify({
-    ajv: {
-      customOptions: {
-        allowUnionTypes: true
+    schemaController: {
+      inputValidatorOptions: {
+        customOptions: {
+          allowUnionTypes: true
+        }
       }
     }
   })
@@ -185,10 +187,12 @@ test('Example - ajv config', (t, done) => {
   t.plan(1)
 
   const fastify = Fastify({
-    ajv: {
-      plugins: [
-        require('ajv-merge-patch')
-      ]
+    schemaController: {
+      inputValidatorOptions: {
+        plugins: [
+          require('ajv-merge-patch')
+        ]
+      }
     }
   })
 
@@ -503,11 +507,13 @@ test('should return custom error messages with ajv-errors', (t, done) => {
   t.plan(3)
 
   const fastify = Fastify({
-    ajv: {
-      customOptions: { allErrors: true },
-      plugins: [
-        require('ajv-errors')
-      ]
+    schemaController: {
+      inputValidatorOptions: {
+        customOptions: { allErrors: true },
+        plugins: [
+          require('ajv-errors')
+        ]
+      }
     }
   })
 
@@ -563,10 +569,12 @@ test('should be able to handle formats of ajv-formats when added by plugins opti
   t.plan(3)
 
   const fastify = Fastify({
-    ajv: {
-      plugins: [
-        require('ajv-formats')
-      ]
+    schemaController: {
+      inputValidatorOptions: {
+        plugins: [
+          require('ajv-formats')
+        ]
+      }
     }
   })
 
@@ -630,8 +638,10 @@ test('should return localized error messages with ajv-i18n', (t, done) => {
   }
 
   const fastify = Fastify({
-    ajv: {
-      customOptions: { allErrors: true }
+    schemaController: {
+      inputValidatorOptions: {
+        customOptions: { allErrors: true }
+      }
     }
   })
 

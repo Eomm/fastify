@@ -727,7 +727,7 @@ test('The default schema compilers should not be called when overwritten by the 
   const fastify = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: function factory () {
+        buildInputValidator: function factory () {
           t.assert.ok('The custom validator compiler should be called')
           return function validatorCompiler () {
             return () => { return true }
@@ -765,6 +765,26 @@ test('The serializer compiler factory is rejected: it is not supported any more'
       }
     }),
     { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+  )
+
+  await fastify.close()
+})
+
+test('The input validator factory key is rejected: it has been renamed', async t => {
+  const fastify = Fastify()
+
+  t.assert.throws(
+    () => Fastify({
+      schemaController: {
+        compilersFactory: {
+          buildValidator: function factory () {
+            t.assert.fail('The renamed input validator factory must not be called')
+            return () => { }
+          }
+        }
+      }
+    }),
+    { code: 'FST_ERR_BUILD_VALIDATOR_RENAMED' }
   )
 
   await fastify.close()

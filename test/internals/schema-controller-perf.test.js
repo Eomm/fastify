@@ -7,7 +7,7 @@ test('SchemaController are NOT loaded when the controllers are custom', async t 
   const app = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: () => () => { }
+        buildInputValidator: () => () => { }
       }
     }
   })
@@ -33,11 +33,24 @@ test('the serializer compiler factory is rejected: it is not supported any more'
   )
 })
 
-test('isCustomValidatorCompiler flag is set correctly when only buildValidator is provided', async t => {
+test('the input validator factory key is rejected: it has been renamed', async t => {
+  t.assert.throws(
+    () => Fastify({
+      schemaController: {
+        compilersFactory: {
+          buildValidator: () => () => { }
+        }
+      }
+    }),
+    { code: 'FST_ERR_BUILD_VALIDATOR_RENAMED' }
+  )
+})
+
+test('isCustomValidatorCompiler flag is set correctly when only buildInputValidator is provided', async t => {
   const app = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: () => () => { }
+        buildInputValidator: () => () => { }
       }
     }
   })

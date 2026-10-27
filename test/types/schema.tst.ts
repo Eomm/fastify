@@ -105,7 +105,7 @@ expect(server.setValidatorCompiler<FastifySchema & { validate: Record<string, un
   fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: factory
+        buildInputValidator: factory
       }
     }
   })

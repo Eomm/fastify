@@ -1849,7 +1849,7 @@ test('setSchemaController: Inherits correctly parent schemas with a customized v
   server.register((instance, _, done) => {
     instance.setSchemaController({
       compilersFactory: {
-        buildValidator: function (externalSchemas) {
+        buildInputValidator: function (externalSchemas) {
           const schemaKeys = Object.keys(externalSchemas)
           t.assert.strictEqual(schemaKeys.length, 2, 'Contains same number of schemas')
           t.assert.deepStrictEqual([someSchema, errorResponseSchema], Object.values(externalSchemas), 'Contains expected schemas')
@@ -1906,7 +1906,7 @@ test('setSchemaController: Inherits correctly parent schemas with a customized v
   t.assert.strictEqual(res.statusCode, 400, 'Should not coerce the string into array')
 })
 
-test('setSchemaController: Inherits buildValidator from parent if not present within the instance', async t => {
+test('setSchemaController: Inherits buildInputValidator from parent if not present within the instance', async t => {
   t.plan(4)
   const customAjv = new Ajv({ coerceTypes: false })
   const someSchema = {
@@ -1929,7 +1929,7 @@ test('setSchemaController: Inherits buildValidator from parent if not present wi
     }
   }
   let rootValidatorCalled = 0
-  const rootBuildValidator = function (externalSchemas) {
+  const rootBuildInputValidator = function (externalSchemas) {
     rootValidatorCalled++
     const schemaKeys = Object.keys(externalSchemas)
     for (const key of schemaKeys) {
@@ -1944,7 +1944,7 @@ test('setSchemaController: Inherits buildValidator from parent if not present wi
   const server = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: rootBuildValidator
+        buildInputValidator: rootBuildInputValidator
       }
     }
   })
@@ -2023,7 +2023,7 @@ test('Should throw if not default validator passed', async t => {
   const plugin = fp(function (pluginInstance, _, pluginDone) {
     pluginInstance.setSchemaController({
       compilersFactory: {
-        buildValidator: function (externalSchemas) {
+        buildInputValidator: function (externalSchemas) {
           const schemaKeys = Object.keys(externalSchemas)
           t.assert.strictEqual(schemaKeys.length, 2)
           t.assert.deepStrictEqual(schemaKeys, ['some', 'another'])
@@ -2196,7 +2196,7 @@ test('setSchemaController: custom validator instance should not mutate headers s
 
   fastify.setSchemaController({
     compilersFactory: {
-      buildValidator: function () {
+      buildInputValidator: function () {
         return ({ schema, method, url, httpPart }) => {
           t.assert.ok(schema instanceof Headers)
           return () => { }

@@ -1247,7 +1247,7 @@ test('Custom validator builder override by custom validator compiler', async t =
   const fastify = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
+        buildInputValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
       }
     }
   })
@@ -1293,7 +1293,7 @@ test('Custom validator builder override by custom validator compiler in child in
   const fastify = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
+        buildInputValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
       }
     }
   })

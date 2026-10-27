@@ -616,8 +616,8 @@ as it is. The defaults are:
 
 ```js
 {
-  useDefaults: false,    // never inject a default into a response
-  coerceTypes: false,    // never coerce the type of a response value
+  useDefaults: false,     // never inject a default into a response
+  coerceTypes: false,     // never coerce the type of a response value
   removeAdditional: true, // strip the properties that the schema does not declare
   allErrors: false
 }

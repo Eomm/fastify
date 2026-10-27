@@ -26,7 +26,7 @@ export interface RequestRouteOptions<ContextConfig = ContextConfigDefault, Schem
   url: string | undefined;
   bodyLimit: number;
   handlerTimeout: number;
-  attachValidation: boolean;
+  attachRequestValidation: boolean;
   logLevel: string;
   exposeHeadRoute: boolean;
   prefixTrailingSlash: string;
@@ -64,7 +64,7 @@ export interface FastifyRequest<RouteGeneric extends RouteGenericInterface = Rou
   server: FastifyInstance;
   body: RequestType['body'];
 
-  /** in order for this to be used the user should ensure they have set the attachValidation option. */
+  /** in order for this to be used the user should ensure they have set the attachRequestValidation option. */
   validationError?: Error & { validation: any; validationContext: string };
 
   /**

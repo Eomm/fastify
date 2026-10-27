@@ -196,7 +196,7 @@ test('should be able to attach validation to request', async (t) => {
 
   const fastify = Fastify()
 
-  fastify.post('/', { schema, attachValidation: true }, function (req, reply) {
+  fastify.post('/', { schema, attachRequestValidation: true }, function (req, reply) {
     reply.code(400).send(req.validationError.validation)
   })
 
@@ -223,7 +223,7 @@ test('attached validationError exposes the same message sent by the default hand
 
   const fastify = Fastify()
 
-  fastify.post('/attached', { schema, attachValidation: true }, function (req, reply) {
+  fastify.post('/attached', { schema, attachRequestValidation: true }, function (req, reply) {
     reply.code(400).send({
       message: req.validationError.message,
       code: req.validationError.code,
@@ -258,7 +258,7 @@ test('default validation errors are FST_ERR_VALIDATION errors without a stack tr
   const fastify = Fastify()
 
   let validationError
-  fastify.post('/', { schema, attachValidation: true }, function (req, reply) {
+  fastify.post('/', { schema, attachRequestValidation: true }, function (req, reply) {
     validationError = req.validationError
     reply.code(400).send()
   })
@@ -272,12 +272,12 @@ test('default validation errors are FST_ERR_VALIDATION errors without a stack tr
   t.assert.strictEqual(validationError.stack, undefined)
 })
 
-test('should respect when attachValidation is explicitly set to false', async (t) => {
+test('should respect when attachRequestValidation is explicitly set to false', async (t) => {
   t.plan(2)
 
   const fastify = Fastify()
 
-  fastify.post('/', { schema, attachValidation: false }, function (req, reply) {
+  fastify.post('/', { schema, attachRequestValidation: false }, function (req, reply) {
     t.assert.fail('should not be here')
     reply.code(200).send(req.validationError.validation)
   })
@@ -299,12 +299,39 @@ test('should respect when attachValidation is explicitly set to false', async (t
   t.assert.strictEqual(response.statusCode, 400)
 })
 
-test('Attached validation error should take precedence over setErrorHandler', async (t) => {
+test('the old attachValidation option is not an alias: the framework answers the validation error itself', async (t) => {
   t.plan(2)
 
   const fastify = Fastify()
 
   fastify.post('/', { schema, attachValidation: true }, function (req, reply) {
+    t.assert.fail('the handler must not be reached')
+    reply.code(200).send(req.validationError.validation)
+  })
+
+  const response = await fastify.inject({
+    method: 'POST',
+    payload: {
+      hello: 'michelangelo'
+    },
+    url: '/'
+  })
+
+  t.assert.strictEqual(response.statusCode, 400)
+  t.assert.deepStrictEqual(JSON.parse(response.payload), {
+    statusCode: 400,
+    code: 'FST_ERR_VALIDATION',
+    error: 'Bad Request',
+    message: "body must have required property 'name'"
+  })
+})
+
+test('Attached validation error should take precedence over setErrorHandler', async (t) => {
+  t.plan(2)
+
+  const fastify = Fastify()
+
+  fastify.post('/', { schema, attachRequestValidation: true }, function (req, reply) {
     reply.code(400).send('Attached: ' + req.validationError)
   })
 

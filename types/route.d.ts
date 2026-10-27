@@ -61,7 +61,7 @@ export interface RouteShorthandOptions<
   Logger extends FastifyBaseLogger = FastifyBaseLogger
 > {
   schema?: SchemaCompiler, // originally FastifySchema
-  attachValidation?: boolean;
+  attachRequestValidation?: boolean;
   exposeHeadRoute?: boolean;
 
   validatorCompiler?: FastifySchemaCompiler<NoInfer<SchemaCompiler>>;

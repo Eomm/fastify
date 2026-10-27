@@ -27,7 +27,7 @@ import { FastifyRegister, FastifyRegisterOptions, RegisterOptions } from './type
 import { FastifyReply } from './types/reply'
 import { FastifyRequest, RequestGenericInterface } from './types/request'
 import { RouteGenericInterface, RouteHandler, RouteHandlerMethod, RouteOptions, RouteShorthandMethod, RouteShorthandOptions, RouteShorthandOptionsWithHandler } from './types/route'
-import { FastifySchema, FastifySchemaCompiler, FastifySchemaValidationError, FastifySerializerCompiler, FastifyInputValidatorOptions, FastifyOutputValidatorOptions, SchemaErrorDataVar, SchemaErrorFormatter } from './types/schema'
+import { FastifySchema, FastifySchemaCompiler, FastifySchemaValidationError, FastifyInputValidatorOptions, FastifyOutputValidatorOptions, SchemaErrorDataVar, SchemaErrorFormatter } from './types/schema'
 import { FastifyServerFactory, FastifyServerFactoryHandler } from './types/server-factory'
 import { FastifyTypeProvider, FastifyTypeProviderDefault, SafePromiseLike } from './types/type-provider'
 import { ContextConfigDefault, HTTPMethods, RawReplyDefaultExpression, RawRequestDefaultExpression, RawServerBase, RawServerDefault, RequestBodyDefault, RequestHeadersDefault, RequestParamsDefault, RequestQuerystringDefault } from './types/utils'
@@ -225,7 +225,7 @@ declare namespace fastify {
     FastifyBodyParser, FastifyContentTypeParser, AddContentTypeParser, hasContentTypeParser, getDefaultJsonParser,
     ProtoAction, ConstructorAction, // './types/content-type-parser'
     FastifyError, // '@fastify/error'
-    FastifySchema, FastifySchemaValidationError, FastifySchemaCompiler, FastifySerializerCompiler, // './types/schema'
+    FastifySchema, FastifySchemaValidationError, FastifySchemaCompiler, // './types/schema'
     HTTPMethods, RawServerBase, RawRequestDefaultExpression, RawReplyDefaultExpression, RawServerDefault,
     ContextConfigDefault, RequestBodyDefault, RequestQuerystringDefault, RequestParamsDefault, RequestHeadersDefault,
     // './types/utils'

@@ -41,8 +41,6 @@ export interface FastifyValidationResult {
  */
 export type FastifySchemaCompiler<T> = (routeSchema: FastifyRouteSchemaDef<T>) => FastifyValidationResult
 
-export type FastifySerializerCompiler<T> = (routeSchema: FastifyRouteSchemaDef<T>) => (data: any) => string
-
 /**
  * The options of the output validator pool.
  *

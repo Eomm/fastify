@@ -34,6 +34,71 @@ const server = readFileSync(
   resolve(__dirname, '../../docs/Reference/Server.md'),
   'utf8'
 )
+const reply = readFileSync(
+  resolve(__dirname, '../../docs/Reference/Reply.md'),
+  'utf8'
+)
+const routes = readFileSync(
+  resolve(__dirname, '../../docs/Reference/Routes.md'),
+  'utf8'
+)
+const typeProviders = readFileSync(
+  resolve(__dirname, '../../docs/Reference/Type-Providers.md'),
+  'utf8'
+)
+
+/**
+ * The reference documents that document the removed serialization APIs.
+ */
+const referenceDocuments = [
+  ['Validation and Serialization', reference],
+  ['Reply', reply],
+  ['Routes', routes],
+  ['Type Providers', typeProviders]
+]
+
+/**
+ * The serialization APIs that Fastify v6 removed.
+ */
+const removedApis = [
+  'getSerializationFunction',
+  'compileSerializationSchema',
+  'serializeInput',
+  'setSerializerCompiler',
+  'serializerOpts',
+  'buildSerializer'
+]
+
+/**
+ * Extracts the section of a document that a heading opens.
+ *
+ * The section starts at the heading and ends at the next heading of the same
+ * level or of a higher one. The result carries the text of the section and
+ * the text of the rest of the document, so that a caller can assert where a
+ * symbol is documented.
+ *
+ * @param {string} document the document
+ * @param {string} heading the text of the heading
+ * @returns {?{text: string, outside: string}} the section of the document,
+ *   `null` when the document has no such heading
+ */
+function sectionOf (document, heading) {
+  const match = new RegExp(`^(#{1,6})\\s+${heading}\\s*$`, 'm').exec(document)
+  if (match === null) {
+    return null
+  }
+
+  const level = match[1].length
+  const start = match.index + match[0].length
+  const rest = document.slice(start)
+  const next = rest.search(new RegExp(`^#{1,${level}}\\s`, 'm'))
+  const end = next === -1 ? document.length : start + next
+
+  return {
+    text: document.slice(start, end),
+    outside: document.slice(0, start) + document.slice(end)
+  }
+}
 
 /**
  * Extracts the code block that follows an anchor of a document.
@@ -153,6 +218,7 @@ test('the migration guide lists the changes of the output side', (t) => {
     'useDefaults: false',
     'coerceTypes: false',
     'removeAdditional: true',
+    'strict: false',
     // the shaping of the payload
     'additionalProperties',
     // the hook of the new pipeline
@@ -196,6 +262,7 @@ test('the reference document declares the output defaults of the runtime', (t) =
   t.assert.ok(!defaults.includes("removeAdditional: 'all'"))
   t.assert.ok(defaults.includes('useDefaults: false'))
   t.assert.ok(defaults.includes('coerceTypes: false'))
+  t.assert.ok(defaults.includes('strict: false'))
 })
 
 test('the reference document describes the two option families and the error path', (t) => {
@@ -210,6 +277,47 @@ test('the reference document describes the two option families and the error pat
 
   for (const surface of surfaces) {
     t.assert.ok(reference.includes(surface), surface)
+  }
+})
+
+test('the section extractor reads the section of a heading and reports its absence', (t) => {
+  const document = '# Title\n\n## First\n\ntext\n\n## Second\n\nmore text\n'
+
+  const section = sectionOf(document, 'Second')
+  t.assert.notStrictEqual(section, null)
+  t.assert.ok(section.text.includes('more text'))
+  t.assert.ok(!section.text.includes('text\n\n## First'))
+  t.assert.ok(section.outside.includes('## First'))
+
+  t.assert.strictEqual(sectionOf(document, 'Third'), null)
+})
+
+test('the removed serialization APIs appear only inside the "Removed in v6" section', (t) => {
+  const documented = new Set()
+
+  for (const [name, document] of referenceDocuments) {
+    const section = sectionOf(document, 'Removed in v6')
+    t.assert.notStrictEqual(section, null, `${name}: the "Removed in v6" section is missing`)
+
+    for (const api of removedApis) {
+      const pattern = new RegExp(`\\b${api}\\b`)
+
+      if (pattern.test(section.text)) {
+        documented.add(api)
+      }
+
+      t.assert.ok(
+        !pattern.test(section.outside),
+        `${name}: the removed API \`${api}\` is presented outside the "Removed in v6" section`
+      )
+    }
+  }
+
+  for (const api of removedApis) {
+    t.assert.ok(
+      documented.has(api),
+      `the removed API \`${api}\` is not documented in a "Removed in v6" section`
+    )
   }
 })
 
@@ -232,6 +340,10 @@ test('the server reference publishes the default of the output pool of the runti
     t.assert.ok(
       section.includes('removeAdditional: true'),
       'the server reference does not publish the default of the output pool'
+    )
+    t.assert.ok(
+      section.includes('strict: false'),
+      'the server reference does not publish the lint default of the output pool'
     )
   }
 })

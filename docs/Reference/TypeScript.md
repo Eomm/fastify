@@ -1567,14 +1567,29 @@ previous hook was `preParsing`, the next hook will be `preHandler`.
 [src](https://github.com/fastify/fastify/blob/main/types/hooks.d.ts#L70)
 
 `preHandler` is the fourth hook to be executed in the request lifecycle. The
-previous hook was `preValidation`, the next hook will be `preSerialization`.
+previous hook was `preValidation`, the next hook will be `preResponseValidation`.
+
+##### fastify.preResponseValidationHookHandler< PreResponseValidationPayload, [RawServer][RawServerGeneric], [RawRequest][RawRequestGeneric], [RawReply][RawReplyGeneric], [RequestGeneric][FastifyRequestGenericInterface], [ContextConfig][ContextConfigGeneric]>(request: [FastifyRequest][FastifyRequest], reply: [FastifyReply][FastifyReply], payload: PreResponseValidationPayload, done: (err: [FastifyError][FastifyError] | null, res?: unknown) => void): Promise\<unknown\> | void
+
+[src](https://github.com/fastify/fastify/blob/main/types/hooks.d.ts#L358)
+
+`preResponseValidation` is the fifth hook to be executed in the request
+lifecycle. The previous hook was `preHandler`, the next hook will be
+`preSerialization`. It runs after the handler returned the payload and before
+the payload is validated against the route's `schema.response`, so the payload
+it produces is validated as well.
+
+> ℹ️ Note:
+> The hook is NOT called if the payload is a string, a Buffer,
+> an ArrayBuffer, a stream or a Response. A `null` payload does reach the
+> hook, but it is never validated.
 
 ##### fastify.preSerializationHookHandler< PreSerializationPayload, [RawServer][RawServerGeneric], [RawRequest][RawRequestGeneric], [RawReply][RawReplyGeneric], [RequestGeneric][FastifyRequestGenericInterface], [ContextConfig][ContextConfigGeneric]>(request: [FastifyRequest][FastifyRequest], reply: [FastifyReply][FastifyReply], payload: PreSerializationPayload, done: (err: [FastifyError][FastifyError] | null, res?: unknown) => void): Promise\<unknown\> | void
 
 [src](https://github.com/fastify/fastify/blob/main/types/hooks.d.ts#L94)
 
-`preSerialization` is the fifth hook to be executed in the request lifecycle.
-The previous hook was `preHandler`, the next hook will be `onSend`.
+`preSerialization` is the sixth hook to be executed in the request lifecycle.
+The previous hook was `preResponseValidation`, the next hook will be `onSend`.
 
 > ℹ️ Note:
 > The hook is NOT called if the payload is a string, a Buffer,
@@ -1584,7 +1599,7 @@ The previous hook was `preHandler`, the next hook will be `onSend`.
 
 [src](https://github.com/fastify/fastify/blob/main/types/hooks.d.ts#L114)
 
-You can change the payload with the `onSend` hook. It is the sixth hook to be
+You can change the payload with the `onSend` hook. It is the seventh hook to be
 executed in the request lifecycle. The previous hook was `preSerialization`, the
 next hook will be `onResponse`.
 
@@ -1596,7 +1611,7 @@ next hook will be `onResponse`.
 
 [src](https://github.com/fastify/fastify/blob/main/types/hooks.d.ts#L134)
 
-`onResponse` is the seventh and last hook in the request hook lifecycle. The
+`onResponse` is the eighth and last hook in the request hook lifecycle. The
 previous hook was `onSend`, there is no next hook.
 
 The onResponse hook is executed when a response has been sent, so you will not

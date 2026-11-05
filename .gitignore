@@ -178,3 +178,6 @@ AGENTS.md
 .agent
 .claude
 .pi
+
+# GSD planning artifacts (generated)
+.planning/

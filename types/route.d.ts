@@ -11,13 +11,14 @@ import {
   preHandlerHookHandler,
   preParsingHookHandler,
   preSerializationHookHandler,
+  preResponseValidationHookHandler,
   preValidationHookHandler
 } from './hooks'
 import { FastifyInstance } from './instance'
 import { FastifyBaseLogger, FastifyChildLoggerFactory, LogLevel } from './logger'
 import { FastifyReply, ReplyGenericInterface } from './reply'
 import { FastifyRequest, RequestGenericInterface } from './request'
-import { FastifySchema, FastifySchemaCompiler, FastifySerializerCompiler, SchemaErrorFormatter } from './schema'
+import { FastifySchema, FastifySchemaCompiler, SchemaErrorFormatter } from './schema'
 import {
   FastifyTypeProvider,
   FastifyTypeProviderDefault,
@@ -60,11 +61,10 @@ export interface RouteShorthandOptions<
   Logger extends FastifyBaseLogger = FastifyBaseLogger
 > {
   schema?: SchemaCompiler, // originally FastifySchema
-  attachValidation?: boolean;
+  attachRequestValidation?: boolean;
   exposeHeadRoute?: boolean;
 
   validatorCompiler?: FastifySchemaCompiler<NoInfer<SchemaCompiler>>;
-  serializerCompiler?: FastifySerializerCompiler<NoInfer<SchemaCompiler>>;
   bodyLimit?: number;
   handlerTimeout?: number;
   logLevel?: LogLevel;
@@ -100,6 +100,10 @@ export interface RouteShorthandOptions<
     NoInfer<SchemaCompiler>, TypeProvider, Logger>>
     | RouteShorthandHook<preHandlerHookHandler<RawServer, RawRequest, RawReply, RouteGeneric, ContextConfig,
     NoInfer<SchemaCompiler>, TypeProvider, Logger>>[];
+  preResponseValidation?: RouteShorthandHook<preResponseValidationHookHandler<unknown, RawServer, RawRequest, RawReply,
+    RouteGeneric, ContextConfig, NoInfer<SchemaCompiler>, TypeProvider, Logger>>
+    | RouteShorthandHook<preResponseValidationHookHandler<unknown, RawServer, RawRequest, RawReply, RouteGeneric,
+      ContextConfig, NoInfer<SchemaCompiler>, TypeProvider, Logger>>[];
   preSerialization?: RouteShorthandHook<preSerializationHookHandler<unknown, RawServer, RawRequest, RawReply,
     RouteGeneric, ContextConfig, NoInfer<SchemaCompiler>, TypeProvider, Logger>>
     | RouteShorthandHook<preSerializationHookHandler<unknown, RawServer, RawRequest, RawReply, RouteGeneric,

@@ -5,7 +5,6 @@ import { Socket } from 'node:net'
 
 import { BuildCompilerFromPool, ValidatorFactory } from '@fastify/ajv-compiler'
 import { FastifyError } from '@fastify/error'
-import { Options as FJSOptions, SerializerFactory } from '@fastify/fast-json-stringify-compiler'
 import { ConstraintStrategy, Config as FindMyWayConfig, HTTPVersion } from 'find-my-way'
 import { InjectOptions, CallbackFunc as LightMyRequestCallback, Chain as LightMyRequestChain, Response as LightMyRequestResponse } from 'light-my-request'
 
@@ -28,7 +27,7 @@ import { FastifyRegister, FastifyRegisterOptions, RegisterOptions } from './type
 import { FastifyReply } from './types/reply'
 import { FastifyRequest, RequestGenericInterface } from './types/request'
 import { RouteGenericInterface, RouteHandler, RouteHandlerMethod, RouteOptions, RouteShorthandMethod, RouteShorthandOptions, RouteShorthandOptionsWithHandler } from './types/route'
-import { FastifySchema, FastifySchemaCompiler, FastifySchemaValidationError, FastifySerializerCompiler, SchemaErrorDataVar, SchemaErrorFormatter } from './types/schema'
+import { FastifySchema, FastifySchemaCompiler, FastifySchemaValidationError, FastifyInputValidatorOptions, FastifyOutputValidatorOptions, SchemaErrorDataVar, SchemaErrorFormatter } from './types/schema'
 import { FastifyServerFactory, FastifyServerFactoryHandler } from './types/server-factory'
 import { FastifyTypeProvider, FastifyTypeProviderDefault, SafePromiseLike } from './types/type-provider'
 import { ContextConfigDefault, HTTPMethods, RawReplyDefaultExpression, RawRequestDefaultExpression, RawServerBase, RawServerDefault, RequestBodyDefault, RequestHeadersDefault, RequestParamsDefault, RequestQuerystringDefault } from './types/utils'
@@ -141,7 +140,6 @@ declare namespace fastify {
     onConstructorPoisoning?: ConstructorAction,
     logger?: boolean | FastifyLoggerOptions<RawServer> & PinoLoggerOptions,
     loggerInstance?: Logger
-    serializerOpts?: FJSOptions | Record<string, unknown>,
     serverFactory?: FastifyServerFactory<RawServer>,
     requestIdHeader?: string | false,
     genReqId?: (req: RawRequestDefaultExpression<RawServer>) => string,
@@ -153,11 +151,19 @@ declare namespace fastify {
         getSchemas(): Record<string, unknown>;
       };
       compilersFactory?: {
-        buildValidator?: ValidatorFactory;
-        buildSerializer?: SerializerFactory;
+        buildInputValidator?: ValidatorFactory;
+        buildOutputValidator?: BuildCompilerFromPool;
       };
+      outputValidatorOptions?: FastifyOutputValidatorOptions;
+      inputValidatorOptions?: FastifyInputValidatorOptions;
     };
     return503OnClosing?: boolean,
+    /**
+     * @deprecated The top-level `ajv` server option is deprecated in Fastify
+     * v6: it still works, but it emits the `FSTDEP026` deprecation warning
+     * once per server and it will be removed in a future release. Use
+     * `schemaController.inputValidatorOptions` instead.
+     */
     ajv?: Parameters<BuildCompilerFromPool>[1],
     frameworkErrors?: <
       RequestGeneric extends RequestGenericInterface = RequestGenericInterface,
@@ -219,7 +225,7 @@ declare namespace fastify {
     FastifyBodyParser, FastifyContentTypeParser, AddContentTypeParser, hasContentTypeParser, getDefaultJsonParser,
     ProtoAction, ConstructorAction, // './types/content-type-parser'
     FastifyError, // '@fastify/error'
-    FastifySchema, FastifySchemaValidationError, FastifySchemaCompiler, FastifySerializerCompiler, // './types/schema'
+    FastifySchema, FastifySchemaValidationError, FastifySchemaCompiler, // './types/schema'
     HTTPMethods, RawServerBase, RawRequestDefaultExpression, RawReplyDefaultExpression, RawServerDefault,
     ContextConfigDefault, RequestBodyDefault, RequestQuerystringDefault, RequestParamsDefault, RequestHeadersDefault,
     // './types/utils'

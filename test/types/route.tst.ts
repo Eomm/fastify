@@ -255,6 +255,23 @@ type LowerCaseHTTPMethods = 'delete' | 'get' | 'head' | 'patch' | 'post' | 'put'
       expect(req.routeOptions.config.url).type.toBe<string>()
       expect(req.routeOptions.config.method).type.toBe<HTTPMethods | HTTPMethods[]>()
     },
+    preResponseValidation: (req, res, payload, done) => {
+      expect(req.body).type.toBe<BodyInterface>()
+      expect(req.query).type.toBe<QuerystringInterface>()
+      expect(req.params).type.toBe<ParamsInterface>()
+      expect(req.headers).type.toBe<http.IncomingHttpHeaders & HeadersInterface>()
+      expect(req.routeOptions.config.foo).type.toBe<string>()
+      expect(req.routeOptions.config.bar).type.toBe<number>()
+      expect(req.routeOptions.config.url).type.toBe<string>()
+      expect(req.routeOptions.config.method).type.toBe<HTTPMethods | HTTPMethods[]>()
+      expect(res.routeOptions.config.foo).type.toBe<string>()
+      expect(res.routeOptions.config.bar).type.toBe<number>()
+      expect(res.routeOptions.config.url).type.toBe<string>()
+      expect(res.routeOptions.config.method).type.toBe<HTTPMethods | HTTPMethods[]>()
+      expect(payload).type.toBe<unknown>()
+      expect(done).type.toBeAssignableTo<(err: FastifyError) => void>()
+      expect(done).type.toBeAssignableTo<(err: null, res: unknown) => void>()
+    },
     preSerialization: (req, res, payload, done) => {
       expect(req.body).type.toBe<BodyInterface>()
       expect(req.query).type.toBe<QuerystringInterface>()
@@ -391,6 +408,21 @@ type LowerCaseHTTPMethods = 'delete' | 'get' | 'head' | 'patch' | 'post' | 'put'
       expect(res.routeOptions.config.bar).type.toBe<number>()
       expect(req.routeOptions.config.url).type.toBe<string>()
       expect(req.routeOptions.config.method).type.toBe<HTTPMethods | HTTPMethods[]>()
+    },
+    preResponseValidation: async (req, res, payload) => {
+      expect(req.body).type.toBe<BodyInterface>()
+      expect(req.query).type.toBe<QuerystringInterface>()
+      expect(req.params).type.toBe<ParamsInterface>()
+      expect(req.headers).type.toBe<http.IncomingHttpHeaders & HeadersInterface>()
+      expect(req.routeOptions.config.foo).type.toBe<string>()
+      expect(req.routeOptions.config.bar).type.toBe<number>()
+      expect(req.routeOptions.config.url).type.toBe<string>()
+      expect(req.routeOptions.config.method).type.toBe<HTTPMethods | HTTPMethods[]>()
+      expect(res.routeOptions.config.foo).type.toBe<string>()
+      expect(res.routeOptions.config.bar).type.toBe<number>()
+      expect(res.routeOptions.config.url).type.toBe<string>()
+      expect(res.routeOptions.config.method).type.toBe<HTTPMethods | HTTPMethods[]>()
+      expect(payload).type.toBe<unknown>()
     },
     preSerialization: async (req, res, payload, done) => {
       expect(req.body).type.toBe<BodyInterface>()

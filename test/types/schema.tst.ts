@@ -1,8 +1,8 @@
-import { StandaloneValidator } from '@fastify/ajv-compiler'
-import { StandaloneSerializer } from '@fastify/fast-json-stringify-compiler'
+import { AjvCompiler, BuildCompilerFromPool, StandaloneValidator } from '@fastify/ajv-compiler'
 import Ajv from 'ajv'
 import { expect } from 'tstyche'
 import fastify, { FastifyInstance, FastifySchema } from '../../fastify.js'
+import { FastifyOutputValidatorOptions, SchemaErrorDataVar } from '../../types/schema.js'
 
 const server = fastify()
 
@@ -57,10 +57,6 @@ expect(server.setValidatorCompiler(({ schema }) => {
   return new Ajv().compile(schema)
 })).type.toBe<FastifyInstance>()
 
-expect(server.setSerializerCompiler(() => {
-  return data => JSON.stringify(data)
-})).type.toBe<FastifyInstance>()
-
 expect(server.post('/test', {
   validatorCompiler: ({ schema }) => {
     return data => {
@@ -99,10 +95,6 @@ expect(server.setValidatorCompiler<FastifySchema & { validate: Record<string, un
   }
 )).type.toBe<FastifyInstance>()
 
-expect(server.setSerializerCompiler<FastifySchema & { validate: string }>(
-  () => data => JSON.stringify(data)
-)).type.toBe<FastifyInstance>()
-
 // https://github.com/fastify/ajv-compiler/issues/95
 {
   const factory = StandaloneValidator({
@@ -113,23 +105,73 @@ expect(server.setSerializerCompiler<FastifySchema & { validate: string }>(
   fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: factory
+        buildInputValidator: factory
       }
     }
   })
 }
 
+// The output side of the schema controller: the options of the output pool
+// and the factory that builds it.
 {
-  const factory = StandaloneSerializer({
-    readMode: false,
-    storeFunction (routeOpts, schemaValidationCode) { }
+  const outputOptionsServer = fastify({
+    schemaController: {
+      outputValidatorOptions: {
+        customOptions: { allErrors: true },
+        plugins: []
+      }
+    }
   })
+  expect(outputOptionsServer).type.toBeAssignableTo<FastifyInstance>()
+}
+
+{
+  const buildOutputValidator: BuildCompilerFromPool = (externalSchemas, outputValidatorOptions) => {
+    expect(externalSchemas).type.toBeAssignableTo<Record<string, unknown>>()
+    expect(outputValidatorOptions).type.toBeAssignableTo<{ customOptions?: { allErrors?: boolean } } | undefined>()
+
+    return (schema) => new Ajv().compile(schema)
+  }
+
+  const outputFactoryServer = fastify({
+    schemaController: {
+      compilersFactory: {
+        buildOutputValidator
+      }
+    }
+  })
+  expect(outputFactoryServer).type.toBeAssignableTo<FastifyInstance>()
+}
+
+{
+  // The JTD *serializer* factory cannot build an output validator: the output
+  // side compiles validators, never serializers.
+  const jtdSerializerFactory = AjvCompiler({ jtdSerializer: true })
 
   fastify({
     schemaController: {
       compilersFactory: {
-        buildSerializer: factory
+        // @ts-expect-error  No overload matches this call.
+        buildOutputValidator: jtdSerializerFactory
       }
     }
   })
 }
+
+// The `mode: 'JTD'` of the input side cannot work on the output side: the
+// output pool validates *and* shapes with the JSON Schema semantics, so the
+// type does not advertise the JTD mode.
+expect<FastifyOutputValidatorOptions>().type.not.toBeAssignableTo<{ mode: 'JTD' }>()
+
+fastify({
+  schemaController: {
+    outputValidatorOptions: {
+      // @ts-expect-error  Type 'string' is not assignable to type 'undefined'.
+      mode: 'JTD'
+    }
+  }
+})
+
+// The output validation context is part of the validation context union
+expect<'response'>().type.toBeAssignableTo<SchemaErrorDataVar>()
+expect<SchemaErrorDataVar>().type.toBeAssignableTo<'body' | 'headers' | 'params' | 'querystring' | 'response'>()

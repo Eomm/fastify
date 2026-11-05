@@ -855,7 +855,7 @@ test('The this should be the same of the encapsulation level', async t => {
   await fastify.inject({ method: 'GET', path: '/nested' })
 })
 
-describe('preSerializationEnd should handle errors if the serialize method throws', () => {
+describe('the preSerialization hooks of an async route', () => {
   test('works with sync preSerialization', (t, testDone) => {
     t.plan(3)
     const fastify = Fastify()
@@ -866,7 +866,7 @@ describe('preSerializationEnd should handle errors if the serialize method throw
     })
 
     fastify.post('/', {
-      handler (req, reply) { reply.send({ notOk: true }) },
+      handler (req, reply) { reply.send({ ok: true }) },
       schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
     })
 
@@ -875,7 +875,7 @@ describe('preSerializationEnd should handle errors if the serialize method throw
       url: '/'
     }, (err, res) => {
       t.assert.ifError(err)
-      t.assert.notEqual(res.statusCode, 200)
+      t.assert.strictEqual(res.statusCode, 200)
       testDone()
     })
   })
@@ -890,7 +890,7 @@ describe('preSerializationEnd should handle errors if the serialize method throw
     })
 
     fastify.post('/', {
-      handler (req, reply) { reply.send({ notOk: true }) },
+      handler (req, reply) { reply.send({ ok: true }) },
       schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } }
     })
 
@@ -899,9 +899,30 @@ describe('preSerializationEnd should handle errors if the serialize method throw
       url: '/'
     }, (err, res) => {
       t.assert.ifError(err)
-      t.assert.notEqual(res.statusCode, 200)
+      t.assert.strictEqual(res.statusCode, 200)
       testDone()
     })
+  })
+
+  test('the route level serializerCompiler option is rejected at registration', (t, testDone) => {
+    t.plan(1)
+    const fastify = Fastify()
+
+    fastify.addHook('preSerialization', async (request, reply, payload) => {
+      t.assert.fail('the hook must not run: the route is never registered')
+      return payload
+    })
+
+    t.assert.throws(
+      () => fastify.post('/', {
+        handler (req, reply) { reply.send({ ok: true }) },
+        schema: { response: { 200: { required: ['ok'], properties: { ok: { type: 'boolean' } } } } },
+        serializerCompiler: () => () => { throw new Error('serialize error') }
+      }),
+      { code: 'FST_ERR_SERIALIZER_COMPILER_REMOVED' }
+    )
+
+    testDone()
   })
 })
 
@@ -1095,4 +1116,57 @@ test('Register an hook (onRequestAbort) as route option should fail if mixing as
     t.assert.strictEqual(e.code, 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER')
     t.assert.strictEqual(e.message, 'Async function has too many arguments. Async hooks should not use the \'done\' argument.')
   }
+})
+
+test('Register an hook (preResponseValidation) as instance option should fail if mixing async and callback style', t => {
+  const fastify = Fastify()
+
+  try {
+    fastify.addHook('preResponseValidation', async (request, reply, payload, done) => {
+      done()
+    })
+    t.assert.fail('preResponseValidation mixing async and callback style')
+  } catch (e) {
+    t.assert.strictEqual(e.code, 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER')
+    t.assert.strictEqual(e.message, 'Async function has too many arguments. Async hooks should not use the \'done\' argument.')
+  }
+})
+
+test('Register an hook (preResponseValidation) as route option should fail if mixing async and callback style', t => {
+  const fastify = Fastify()
+
+  try {
+    fastify.get(
+      '/',
+      {
+        preResponseValidation: [
+          async (request, reply, payload, done) => {
+            done()
+          }
+        ]
+      },
+      async (request, reply) => {
+        return { hello: 'world' }
+      }
+    )
+    t.assert.fail('preResponseValidation mixing async and callback style')
+  } catch (e) {
+    t.assert.strictEqual(e.code, 'FST_ERR_HOOK_INVALID_ASYNC_HANDLER')
+    t.assert.strictEqual(e.message, 'Async function has too many arguments. Async hooks should not use the \'done\' argument.')
+  }
+})
+
+test('an async preResponseValidation hook receives the payload and replaces it', async t => {
+  const fastify = Fastify()
+  t.after(() => { fastify.close() })
+
+  fastify.addHook('preResponseValidation', async (request, reply, payload) => {
+    return { ...payload, hello: 'world' }
+  })
+
+  fastify.get('/', async () => ({ hello: 'fastify' }))
+
+  const result = await fastify.inject('/')
+  t.assert.strictEqual(result.statusCode, 200)
+  t.assert.deepStrictEqual(JSON.parse(result.payload), { hello: 'world' })
 })

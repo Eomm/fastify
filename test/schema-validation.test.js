@@ -328,7 +328,7 @@ test('Encapsulation', (t, testDone) => {
     instance.register((instance, opts, done) => {
       instance.post('/two', {
         handler (req, reply) {
-          t.assert.deepStrictEqual(instance.validatorCompiler, validator)
+          t.assert.deepStrictEqual(instance.inputValidatorCompiler, validator)
           reply.send({ foo: 'two' })
         },
         schema: {
@@ -342,7 +342,7 @@ test('Encapsulation', (t, testDone) => {
       instance.post('/three', {
         validatorCompiler: anotherValidator,
         handler (req, reply) {
-          t.assert.deepStrictEqual(instance.validatorCompiler, validator, 'the route validator does not change the instance one')
+          t.assert.deepStrictEqual(instance.inputValidatorCompiler, validator, 'the route validator does not change the instance one')
           reply.send({ foo: 'three' })
         },
         schema: {
@@ -356,7 +356,7 @@ test('Encapsulation', (t, testDone) => {
 
   fastify.register((instance, opts, done) => {
     instance.post('/clean', function (req, reply) {
-      t.assert.strictEqual(instance.validatorCompiler, undefined)
+      t.assert.strictEqual(instance.inputValidatorCompiler, undefined)
       reply.send({ foo: 'bar' })
     })
     done()
@@ -1031,9 +1031,11 @@ test('Custom AJV settings - pt1', (t, testDone) => {
 test('Custom AJV settings - pt2', (t, testDone) => {
   t.plan(2)
   const fastify = Fastify({
-    ajv: {
-      customOptions: {
-        coerceTypes: false
+    schemaController: {
+      inputValidatorOptions: {
+        customOptions: {
+          coerceTypes: false
+        }
       }
     }
   })
@@ -1247,7 +1249,7 @@ test('Custom validator builder override by custom validator compiler', async t =
   const fastify = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
+        buildInputValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
       }
     }
   })
@@ -1293,7 +1295,7 @@ test('Custom validator builder override by custom validator compiler in child in
   const fastify = Fastify({
     schemaController: {
       compilersFactory: {
-        buildValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
+        buildInputValidator: () => (routeSchemaDef) => ajv1.compile(routeSchemaDef.schema)
       }
     }
   })
@@ -1969,7 +1971,7 @@ test('header schema detects a $ref inside propertyNames nested in an array', asy
 
 test('header schema normalization traverses dependent schema keywords', async t => {
   const fastify = Fastify({
-    ajv: { customOptions: { strictSchema: false } }
+    schemaController: { inputValidatorOptions: { customOptions: { strictSchema: false } } }
   })
 
   fastify.get('/', {
@@ -2076,7 +2078,7 @@ test('header schema propertyNames: not-enum deny-list is lowercased', async t =>
 
 test('header schema propertyNames: non-string enum items are left untouched', async t => {
   const fastify = Fastify({
-    ajv: { customOptions: { strictSchema: false } }
+    schemaController: { inputValidatorOptions: { customOptions: { strictSchema: false } } }
   })
 
   fastify.get('/', {

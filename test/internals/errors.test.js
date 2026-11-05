@@ -5,7 +5,7 @@ const errors = require('../../lib/errors')
 const { readFileSync } = require('node:fs')
 const { resolve } = require('node:path')
 
-const expectedErrors = 94
+const expectedErrors = 97
 
 test(`should expose ${expectedErrors} errors`, t => {
   t.plan(1)
@@ -495,22 +495,52 @@ test('FST_ERR_FAILED_ERROR_SERIALIZATION', t => {
   t.assert.ok(error instanceof Error)
 })
 
-test('FST_ERR_MISSING_SERIALIZATION_FN', t => {
-  t.plan(5)
-  const error = new errors.FST_ERR_MISSING_SERIALIZATION_FN()
-  t.assert.strictEqual(error.name, 'FastifyError')
-  t.assert.strictEqual(error.code, 'FST_ERR_MISSING_SERIALIZATION_FN')
-  t.assert.strictEqual(error.message, 'Missing serialization function. Key "%s"')
-  t.assert.strictEqual(error.statusCode, 500)
-  t.assert.ok(error instanceof Error)
-})
-
 test('FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN', t => {
   t.plan(5)
   const error = new errors.FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN()
   t.assert.strictEqual(error.name, 'FastifyError')
   t.assert.strictEqual(error.code, 'FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN')
   t.assert.strictEqual(error.message, 'Missing serialization function. Key "%s:%s"')
+  t.assert.strictEqual(error.statusCode, 500)
+  t.assert.ok(error instanceof Error)
+})
+
+test('FST_ERR_OUTPUT_VALIDATION', t => {
+  t.plan(5)
+  const error = new errors.FST_ERR_OUTPUT_VALIDATION('/hello must be number')
+  t.assert.strictEqual(error.name, 'FastifyError')
+  t.assert.strictEqual(error.code, 'FST_ERR_OUTPUT_VALIDATION')
+  t.assert.strictEqual(error.message, 'Response validation failed. Errors: /hello must be number')
+  t.assert.strictEqual(error.statusCode, 500)
+  t.assert.ok(error instanceof Error)
+})
+
+test('FST_ERR_BUILD_VALIDATOR_RENAMED', t => {
+  t.plan(5)
+  const error = new errors.FST_ERR_BUILD_VALIDATOR_RENAMED()
+  t.assert.strictEqual(error.name, 'FastifyError')
+  t.assert.strictEqual(error.code, 'FST_ERR_BUILD_VALIDATOR_RENAMED')
+  t.assert.strictEqual(error.message, "The 'compilersFactory.buildValidator' key has been renamed to 'compilersFactory.buildInputValidator' in Fastify v6. See the V5 to V6 migration guide for the alternatives.")
+  t.assert.strictEqual(error.statusCode, 500)
+  t.assert.ok(error instanceof Error)
+})
+
+test('FST_ERR_SERIALIZER_COMPILER_REMOVED', t => {
+  t.plan(5)
+  const error = new errors.FST_ERR_SERIALIZER_COMPILER_REMOVED('fastify.setSerializerCompiler()')
+  t.assert.strictEqual(error.name, 'FastifyError')
+  t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_COMPILER_REMOVED')
+  t.assert.strictEqual(error.message, "The serializer compiler has been removed in Fastify v6: 'fastify.setSerializerCompiler()' is not supported any more. See the V5 to V6 migration guide for the alternatives.")
+  t.assert.strictEqual(error.statusCode, 500)
+  t.assert.ok(error instanceof Error)
+})
+
+test('FST_ERR_SERIALIZER_OPTS_REMOVED', t => {
+  t.plan(5)
+  const error = new errors.FST_ERR_SERIALIZER_OPTS_REMOVED()
+  t.assert.strictEqual(error.name, 'FastifyError')
+  t.assert.strictEqual(error.code, 'FST_ERR_SERIALIZER_OPTS_REMOVED')
+  t.assert.strictEqual(error.message, "The 'serializerOpts' server option has been removed in Fastify v6. See the V5 to V6 migration guide for the alternatives.")
   t.assert.strictEqual(error.statusCode, 500)
   t.assert.ok(error instanceof Error)
 })

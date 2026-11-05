@@ -20,6 +20,7 @@ declared using the shorthand method or the full declaration.
 - [Constraints](#constraints)
   - [Version Constraints](#version-constraints)
   - [Host Constraints](#host-constraints)
+- [Removed in v6](#removed-in-v6)
 
 ### Full declaration
 <a id="full-declaration"></a>
@@ -53,10 +54,11 @@ fastify.route(options)
   Defaults to the value of [`exposeHeadRoutes`](./Server.md#exposeHeadRoutes)
   instance option. If you want a custom `HEAD` handler without disabling this
   option, make sure to define it before the `GET` route.
-* `attachValidation`: attach `validationError` to request, if there is a schema
-  validation error, instead of sending the error to the error handler. The
-  default [error format](https://ajv.js.org/api.html#error-objects) is the Ajv
-  one.
+* `attachRequestValidation`: attach `validationError` to request, if there is a
+  schema validation error, instead of sending the error to the error handler.
+  The default [error format](https://ajv.js.org/api.html#error-objects) is the
+  Ajv one. The option was named `attachValidation` in v5: see the
+  [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md).
 * `onRequest(request, reply, done)`: a [function](./Hooks.md#onrequest) called
   as soon as a request is received, it could also be an array of functions.
 * `preParsing(request, reply, payload, done)`: a
@@ -68,6 +70,10 @@ fastify.route(options)
   functions.
 * `preHandler(request, reply, done)`: a [function](./Hooks.md#prehandler) called
   just before the request handler, it could also be an array of functions.
+* `preResponseValidation(request, reply, payload, done)`: a
+  [function](./Hooks.md#preresponsevalidation) called just after the request
+  handler and before the payload is validated against `schema.response`, it
+  could also be an array of functions.
 * `preSerialization(request, reply, payload, done)`: a
   [function](./Hooks.md#preserialization) called just before the serialization,
   it could also be an array of functions.
@@ -101,10 +107,6 @@ fastify.route(options)
 * `validatorCompiler({ schema, method, url, httpPart })`: function that builds
   schemas for request validations. See the [Validation and
   Serialization](./Validation-and-Serialization.md#schema-validator)
-  documentation.
-* `serializerCompiler({ schema, method, url, httpStatus, contentType })`:
-  function that builds schemas for response serialization. See the [Validation and
-  Serialization](./Validation-and-Serialization.md#schema-serializer)
   documentation.
 * `schemaErrorFormatter(errors, dataVar)`: function that formats the errors from
   the validation compiler. See the [Validation and
@@ -145,7 +147,8 @@ fastify.route(options)
 
 > ℹ️ Note:
 > The documentation for `onRequest`, `preParsing`, `preValidation`,
-> `preHandler`, `preSerialization`, `onSend`, and `onResponse` is detailed in
+> `preHandler`, `preResponseValidation`, `preSerialization`, `onSend`, and
+> `onResponse` is detailed in
 > [Hooks](./Hooks.md). To send a response before the request is handled by the
 > `handler`, see [Respond to a request from
 > a hook](./Hooks.md#respond-to-a-request-from-a-hook).
@@ -820,3 +823,17 @@ const secret = {
 >   }
 > })
 > ```
+
+### Removed in v6
+<a id="removed-in-v6"></a>
+
+The route level `serializerCompiler({ schema, method, url, httpStatus,
+contentType })` option has been removed: the response body is produced by the
+native `JSON.stringify()`, after the response schema has validated and shaped
+the payload. A route that declares the option is rejected at registration with
+the `FST_ERR_SERIALIZER_COMPILER_REMOVED` error — the option is never
+silently ignored.
+
+See the [Validation and Serialization](./Validation-and-Serialization.md#removed-in-v6)
+documentation for the whole list of the removed serialization APIs and the
+[V5 to V6 migration guide](../Guides/Migration-Guide-V6.md).

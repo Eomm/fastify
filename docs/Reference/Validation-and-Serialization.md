@@ -16,10 +16,9 @@ All examples use the
 specification.
 
 > ⚠ Warning:
-> Treat schema definitions as application code. Validation and serialization
-> features use `new Function()`, which is unsafe with user-provided schemas. See
-> [Ajv](https://www.npmjs.com/package/ajv) and
-> [fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify) for details.
+> Treat schema definitions as application code. Validation features use
+> `new Function()`, which is unsafe with user-provided schemas. See
+> [Ajv](https://www.npmjs.com/package/ajv) for details.
 >
 > Whilst Fastify supports the
 > [`$async` Ajv feature](https://ajv.js.org/guide/async-validation.html),
@@ -36,12 +35,12 @@ specification.
 
 ### Core concepts
 Validation and serialization are handled by two customizable dependencies:
-- [Ajv v8](https://www.npmjs.com/package/ajv) for request validation
-- [fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify) for
-  response body serialization
+- [Ajv v8](https://www.npmjs.com/package/ajv) for the request validation and
+  for the response validation
+- the native `JSON.stringify()` for the response body serialization
 
-These dependencies share only the JSON schemas added to Fastify's instance via
-`.addSchema(schema)`.
+The request side and the response side share the JSON schemas added to
+Fastify's instance via `.addSchema(schema)`.
 
 #### Adding a shared schema
 <a id="shared-schema"></a>
@@ -430,14 +429,22 @@ For more information, see [Ajv Coercion](https://ajv.js.org/coercion.html).
 A list of plugins can be provided for use with the default `ajv` instance.
 Ensure the plugin is **compatible with the Ajv version shipped within Fastify**.
 
-> Refer to [`ajv options`](./Server.md#ajv) to check plugins format.
+> The plugins of the input pool are configured with the
+> [`schemaController.inputValidatorOptions`](./Server.md#schema-controller)
+> option. The top-level `ajv` server option still configures the same pool,
+> but it is deprecated in Fastify v6: it emits the `FSTDEP026` deprecation
+> warning. See the
+> [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
+> details.
 
 ```js
 const fastify = require('fastify')({
-  ajv: {
-    plugins: [
-      require('ajv-merge-patch')
-    ]
+  schemaController: {
+    inputValidatorOptions: {
+      plugins: [
+        require('ajv-merge-patch')
+      ]
+    }
   }
 })
 
@@ -496,6 +503,19 @@ body, URL parameters, headers, and query string. The default `validatorCompiler`
 returns a function that implements the [ajv](https://ajv.js.org/) validation
 interface. Fastify uses it internally to speed up validation.
 
+Fastify owns two separate pools of compilers: the **input** pool validates the
+request and the **output** pool validates and shapes the response. The two
+pools are read through the two instance level accessors
+[`fastify.inputValidatorCompiler`](./Server.md#input-validator-compiler) and
+[`fastify.outputValidatorCompiler`](./Server.md#output-validator-compiler). The
+input pool is built by the `compilersFactory.buildInputValidator` factory and
+the output pool by the `compilersFactory.buildOutputValidator` factory. The
+input side is configured through the
+[`schemaController.inputValidatorOptions`](./Server.md#schema-controller)
+option, and the output side through the
+[`schemaController.outputValidatorOptions`](./Server.md#schema-controller)
+option: the options that make sense differ per direction.
+
 Fastify's [baseline ajv
 configuration](https://github.com/fastify/ajv-compiler#ajv-configuration) is:
 
@@ -512,8 +532,154 @@ configuration](https://github.com/fastify/ajv-compiler#ajv-configuration) is:
 }
 ```
 
-Modify the baseline configuration by providing
-[`ajv.customOptions`](./Server.md#factory-ajv) to the Fastify factory.
+Modify the baseline configuration by providing the
+[`schemaController.inputValidatorOptions`](./Server.md#schema-controller) option
+to the Fastify factory. The top-level
+[`ajv`](./Server.md#factory-ajv) option still configures the input pool, but
+it is deprecated in Fastify v6.
+
+> ℹ️ Note:
+> The names of the v5 surface have been renamed in Fastify v6: the factory key
+> `compilersFactory.buildValidator` is now
+> `compilersFactory.buildInputValidator` (the old key is a hard error at
+> startup, `FST_ERR_BUILD_VALIDATOR_RENAMED`) and the instance accessor
+> `fastify.validatorCompiler` is now `fastify.inputValidatorCompiler`. See the
+> [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
+> details.
+
+##### The two option families of the schema controller
+<a id="schema-controller-options"></a>
+
+Both pools of the
+[`schemaController`](./Server.md#schema-controller) option accept the same
+three members:
+
+- `customOptions`: the options of the underlying Ajv instance;
+- `plugins`: the list of the Ajv plugins of the pool;
+- `onCreate`: a callback that receives the Ajv instance of the pool, so that
+  formats and keywords can be added to it.
+
+The **input** family configures the pool that validates the request:
+
+```js
+const fastify = require('fastify')({
+  schemaController: {
+    inputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all'
+      },
+      plugins: [
+        require('ajv-merge-patch')
+      ],
+      onCreate: (ajv) => {
+        ajv.addFormat('myFormat', (data) => typeof data === 'string')
+      }
+    }
+  }
+})
+```
+
+The **output** family configures the pool that validates and shapes the
+response:
+
+```js
+const fastify = require('fastify')({
+  schemaController: {
+    outputValidatorOptions: {
+      customOptions: {
+        // The output pool is strict by default: `removeAdditional: true`
+        // strips the properties that the schema does not declare. The value
+        // `'all'` must not be used: it removes every additional property,
+        // even the ones that an `additionalProperties: <schema>` allows.
+        removeAdditional: true
+      },
+      plugins: [
+        require('ajv-merge-patch')
+      ],
+      onCreate: (ajv) => {
+        ajv.addFormat('myFormat', (data) => typeof data === 'string')
+      }
+    }
+  }
+})
+```
+
+The two families are independent: the options of one do not leak into the
+other, and the output pool never inherits the input options (the output pool
+is strict by default, see below).
+
+##### The strict output defaults
+<a id="output-validator-defaults"></a>
+
+The output pool is **strict by default**: the response must match the schema
+as it is. The defaults are:
+
+```js
+{
+  useDefaults: false,     // never inject a default into a response
+  coerceTypes: false,     // never coerce the type of a response value
+  removeAdditional: true, // strip the properties that the schema does not declare
+  allErrors: false,       // report the first error only
+  strict: false           // never lint the response schema
+}
+```
+
+The three strict defaults are the observable difference from the v5 behaviour:
+
+* **no type coercion**: a value whose type does not match the schema answers
+  HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error;
+* **no injected `default`**: a `default` of the response schema never reaches
+  the wire;
+* **the extra properties are stripped**: the properties that the response
+  schema does not declare are removed from the payload, exactly as the v5
+  serializer did.
+
+The `removeAdditional: true` option removes a property only where the schema
+declares `additionalProperties: false`. The **parity layer** of the framework
+(`lib/output-schema-parity.js`) declares it exactly where the v5 serializer
+dropped the extra properties, so the two options work together:
+
+* an object schema that declares **no** `additionalProperties` drops the
+  properties that it does not declare — the v5 behaviour;
+* an object schema that declares `additionalProperties: true` **keeps** the
+  extra properties: they reach the client. A schema that declares an
+  `additionalProperties` schema keeps them too, and validates them;
+* the members of a composition (`allOf`, `anyOf`, `oneOf`, `if`/`then`/`else`)
+  are merged, exactly like the v5 serializer merged them.
+
+The value `'all'` must not be used on the output side: it removes every
+additional property, even the ones that an `additionalProperties: <schema>`
+allows, and it removes the properties of the members of a composition inside
+every member.
+
+Every default can be overridden through the
+`schemaController.outputValidatorOptions.customOptions` option, or through the
+`schemaController.compilersFactory.buildOutputValidator` factory.
+
+The `strict: false` default is a **schema lint switch only**: the output pool
+never rejects a response schema for carrying an unknown or an annotation
+keyword (`example`, `discriminator`, ...) or for omitting its `type`. It does
+not weaken the four data options above: a payload that violates the schema
+still answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error.
+
+`fast-json-stringify` never linted the response schemas, so the output side
+must not lint them either. The lint can be turned back on through the custom
+options of the pool:
+
+```js
+const fastify = Fastify({
+  schemaController: {
+    outputValidatorOptions: {
+      customOptions: {
+        strict: true
+      }
+    }
+  }
+})
+```
+
+A response schema that carries an unknown keyword then fails at boot with the
+`FST_ERR_SCH_SERIALIZATION_BUILD` error.
 
 To change or set additional config options, create a custom instance and
 override the existing one:
@@ -530,6 +696,31 @@ const ajv = new Ajv({
 })
 fastify.setValidatorCompiler(({ schema, method, url, httpPart }) => {
   return ajv.compile(schema)
+})
+```
+
+The same custom compiler can be installed through the
+`compilersFactory.buildInputValidator` key of the `schemaController` option,
+which builds the whole input pool:
+
+```js
+const Ajv = require('ajv')
+const ajv = new Ajv({
+  removeAdditional: 'all',
+  useDefaults: true,
+  coerceTypes: 'array'
+})
+
+const fastify = require('fastify')({
+  schemaController: {
+    compilersFactory: {
+      buildInputValidator (externalSchemas, inputValidatorOptions) {
+        return function ({ schema, method, url, httpPart }) {
+          return ajv.compile(schema)
+        }
+      }
+    }
+  }
 })
 ```
 
@@ -741,9 +932,10 @@ const errorHandler = (error, request, reply) => {
 ### Serialization
 <a id="serialization"></a>
 
-Fastify uses [fast-json-stringify](https://www.npmjs.com/package/fast-json-stringify)
-to send data as JSON if an output schema is provided in the route options. Using
-an output schema can drastically increase throughput and help prevent accidental
+Fastify sends data as JSON with the native `JSON.stringify()`. When an output
+schema is provided in the route options, the schema validates and shapes the
+payload before it is serialized: the properties that the schema does not
+declare are removed from the response, which helps prevent accidental
 disclosure of sensitive information.
 
 Example:
@@ -851,44 +1043,155 @@ const schema = {
 fastify.post('/url', { schema }, handler)
 ```
 
-> When the route declares a per-content-type response schema through `content`,
-> Fastify matches the response `Content-Type` against the declared keys and falls
-> back to `*/*` (if present). If the response `Content-Type` is not declared and
-> there is no `*/*` key, serialization **fails closed**: Fastify throws
-> `FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN` and replies with a `500` error,
-> instead of silently serializing the payload with `JSON.stringify` (which would
-> bypass the response schema). Every `Content-Type` a route may respond with must
-> be declared, or the route must define a `*/*` catch-all.
+#### The output validation
 
-#### Serializer Compiler
+The response body is produced in two steps:
+
+1. the **output validation**: the Ajv validator of the output side validates
+   the payload against the response schema of the route and shapes it — the
+   properties that the schema does not declare are removed from the payload,
+   unless the schema declares `additionalProperties: true` (or an
+   `additionalProperties` schema), which keeps them;
+2. the **native `JSON.stringify()`**: the shaped payload is serialized.
+
+The order of the response pipeline is: the handler, the
+[`preResponseValidation`](./Hooks.md#preresponsevalidation) hook, the output
+validation, the [`preSerialization`](./Hooks.md#preserialization) hook, the
+serialization and the [`onSend`](./Hooks.md#onsend) hook.
+
+A route that declares no `schema.response` is not validated: the payload
+reaches the wire as the handler produced it.
+
+The response schema is looked up by the status code and by the content type of
+the answer. The lookup is **lenient on the status code**: when no schema
+matches the status code (not the exact code, not the `NXX` family and not
+`default`), no validation runs and the payload is sent as it is. The lookup
+**fails closed on the content type**: when the matched status code declares a
+`content` map that covers neither the content type of the answer nor the
+`*/*` wildcard, the response answers HTTP 500 with the
+`FST_ERR_MISSING_CONTENTTYPE_SERIALIZATION_FN` error.
+
+A payload that violates the response schema answers HTTP 500 with the
+[`FST_ERR_OUTPUT_VALIDATION`](./Errors.md#fst_err_output_validation) error.
+The error carries the Ajv `validation` array and the `validationContext`
+property, which is `response` on this side.
+
+A `null` payload is **not** validated: the body is `null`. The v5 serializer
+answered an empty object for a `null` payload.
+
+A `string` payload is validated as well, but it is neither shaped nor
+serialized: it reaches the wire exactly as the handler produced it, and a
+string that violates the response schema answers HTTP 500 with the
+`FST_ERR_OUTPUT_VALIDATION` error and the Ajv `validation` array.
+
+The output side is configured by the
+[`schemaController.outputValidatorOptions`](./Server.md#schema-controller) and
+the `schemaController.compilersFactory.buildOutputValidator` members.
+
+#### The asynchronous output validator
+
+An output validator may be asynchronous. The two asynchronous contracts are not
+the same, and the framework tells them apart:
+
+- an **Ajv `$async` validator** resolves with the *validated data* and rejects
+  when the validation fails. The resolved value is never a verdict: a payload
+  whose validated value is the boolean `false` is a valid payload, and the
+  payload that reaches the wire is the one the validator resolved with;
+- a **custom validator**, built by the
+  `schemaController.compilersFactory.buildOutputValidator` factory, follows the
+  contract of that factory: it rejects the payload by throwing an error (or by
+  rejecting the promise it returns) and it resolves `false` to reject it.
+
+#### The differences from the v5 behaviour
+
+The schema still does the shaping, but the serialization itself is the native
+one. The differences a user can observe are:
+
+* **no type coercion**: a payload whose type does not match the schema is not
+  coerced, it answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error and
+  the Ajv `validation` array;
+* **no schema `default` on the wire**: a `default` of the response schema is
+  not injected into the body;
+* **the `preSerialization` hook owns what it writes**: the payload is shaped
+  *before* the hook runs, so a field that the hook adds reaches the wire;
+* **a property-less object schema answers `{}`**: an object schema that
+  declares no `properties` and no `patternProperties` strips every property of
+  the payload, exactly as the v5 serializer did. The keywords that make a
+  schema an object schema are the ones the v5 serializer used: `type:
+  'object'`, `properties`, `patternProperties`, `additionalProperties`,
+  `required`, `minProperties`, `maxProperties` and `dependencies`. A **union
+  type that carries `object`** (`type: ['object', 'null']`, the shape of a
+  nullable response object) describes an object too. A schema that declares
+  another keyword only (`propertyNames`, for instance) does not describe an
+  object: it keeps every property of the payload, as the v5 serializer did.
+
+#### The native `JSON.stringify()` semantics
+
+The payload that reaches the serializer is a plain JavaScript value, so the
+semantics of the native `JSON.stringify()` apply:
+
+* a `BigInt` throws a `TypeError`;
+* a `Date` is serialized as its ISO string;
+* an `undefined` property is omitted;
+* `NaN` and `Infinity` become `null`.
+
+#### The property order
+
+The properties are emitted in the order of the **payload**, not in the order of
+the schema. The two orders can differ and the bytes follow the payload.
+
+#### The error path
+
+An error that a route answers is serialized by the same pipeline: when the
+route declares an error schema that matches the status code and the content
+type, the error body is validated and shaped by the output validator and then
+serialized. When no schema matches, the built-in error serializer answers.
+
+Two divergences of the error path are worth knowing:
+
+* an error body that does **not** satisfy its own error schema answers HTTP
+  500 with the `FST_ERR_FAILED_ERROR_SERIALIZATION` error — the error path
+  never recurses;
+* an error whose route declares an `$async` output schema is answered with the
+  built-in error serializer, because the error path does not await an
+  asynchronous validator.
+
+The body of an error carries the **own enumerable properties** of the error
+object: the `message` of the error is part of the body already, the `stack` is
+never copied, but every other property that the error carries is. An error
+schema that allows additional properties — an `additionalProperties: true`, or
+an `additionalProperties` schema — therefore exposes them to the client: the
+Ajv `validation` array and the `validationContext` property of a failed output
+validation, and every property that the application attaches to the error. An
+error schema that declares no `additionalProperties` drops them (the parity
+layer declares `additionalProperties: false`, see
+[the strict output defaults](#output-validator-defaults)), exactly as the v5
+serializer did.
+
+#### A custom serializer disables the response validation
+
+A reply that is handled by a custom serializer — [`reply.serializer(fn)`](./Reply.md#serializerfunc)
+or `fastify.setReplySerializer(fn)` — is never validated and never shaped: the
+payload reaches the wire as it is.
+
+#### Removed in v6
 <a id="schema-serializer"></a>
 
-The `serializerCompiler` returns a function that must return a string from an
-input object. When defining a response JSON Schema, change the default
-serialization method by providing a function to serialize each route.
+`fastify.setSerializerCompiler()`, the route level `serializerCompiler` option
+and `compilersFactory.buildSerializer` have been removed: they throw the
+`FST_ERR_SERIALIZER_COMPILER_REMOVED` error. The response body is produced by
+the native `JSON.stringify()`, after the response schema has validated and
+shaped the payload.
 
-```js
-fastify.setSerializerCompiler(({ schema, method, url, httpStatus, contentType }) => {
-  return data => JSON.stringify(data)
-})
+The `reply.getSerializationFunction()`, `reply.compileSerializationSchema()`
+and `reply.serializeInput()` helpers are removed as well, and the
+`serializerOpts` server option is rejected at boot with the
+`FST_ERR_SERIALIZER_OPTS_REMOVED` error. The `reply.serialize(payload)` helper
+survives as an alias of `JSON.stringify(payload)`.
 
-fastify.get('/user', {
-  handler (req, reply) {
-    reply.send({ id: 1, name: 'Foo', image: 'BIG IMAGE' })
-  },
-  schema: {
-    response: {
-      '2xx': {
-        type: 'object',
-        properties: {
-          id: { type: 'number' },
-          name: { type: 'string' }
-        }
-      }
-    }
-  }
-})
-```
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
+one-line replacement of every removed
+symbol.
 
 *To set a custom serializer in a specific part of the code, use
 [`reply.serializer(...)`](./Reply.md#serializerfunc).*
@@ -927,7 +1230,8 @@ with the following payload:
 > details), configure a custom error handler using
 > [`setErrorHandler()`](./Server.md#seterrorhandler).
 
-To handle errors inside the route, specify the `attachValidation` option. If
+To handle errors inside the route, specify the `attachRequestValidation`
+option. If
 there is a validation error, the `validationError` property of the request will
 contain the same `Error` object Fastify would have sent on its own, so no
 message has to be rebuilt from the raw validation result:
@@ -949,7 +1253,7 @@ message has to be rebuilt from the raw validation result:
 ```js
 const fastify = Fastify()
 
-fastify.post('/', { schema, attachValidation: true }, function (req, reply) {
+fastify.post('/', { schema, attachRequestValidation: true }, function (req, reply) {
   if (req.validationError) {
     // `req.validationError.message` is the formatted message
     // `req.validationError.validation` contains the raw validation result
@@ -957,6 +1261,14 @@ fastify.post('/', { schema, attachValidation: true }, function (req, reply) {
   }
 })
 ```
+
+> ℹ️ Note:
+> The option was named `attachValidation` in Fastify v5. The old name has been
+> renamed in Fastify v6 and it is **not** an alias: a route that still declares
+> it does not attach the validation errors, the framework answers the
+> validation error itself. See the
+> [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for the
+> details.
 
 #### `schemaErrorFormatter`
 
@@ -1012,15 +1324,17 @@ case:
 
 ```js
 const fastify = Fastify({
-  ajv: {
-    customOptions: {
-      jsonPointers: true,
-      // ⚠ Warning: Enabling this option may lead to this security issue https://www.cvedetails.com/cve/CVE-2020-8192/
-      allErrors: true
-    },
-    plugins: [
-      require('ajv-errors')
-    ]
+  schemaController: {
+    inputValidatorOptions: {
+      customOptions: {
+        jsonPointers: true,
+        // ⚠ Warning: Enabling this option may lead to this security issue https://www.cvedetails.com/cve/CVE-2020-8192/
+        allErrors: true
+      },
+      plugins: [
+        require('ajv-errors')
+      ]
+    }
   }
 })
 
@@ -1203,8 +1517,6 @@ const refToSharedSchemaDefinitions = {
 - [JSON Schema](https://json-schema.org/)
 - [Understanding JSON
   Schema](https://json-schema.org/understanding-json-schema/about)
-- [fast-json-stringify
-  documentation](https://github.com/fastify/fast-json-stringify)
 - [Ajv documentation](https://github.com/ajv-validator/ajv/blob/master/README.md)
 - [Ajv i18n](https://github.com/ajv-validator/ajv-i18n)
 - [Ajv custom errors](https://github.com/ajv-validator/ajv-errors)

@@ -48,6 +48,7 @@ const { Hooks, hookRunnerApplication, supportedHooks } = require('./lib/hooks')
 const { createChildLogger, defaultChildLoggerFactory, createLogger, createLogController, LogController } = require('./lib/logger-factory')
 const pluginUtils = require('./lib/plugin-utils.js')
 const { getGenReqId, reqIdGenFactory } = require('./lib/req-id-gen-factory.js')
+const { FSTDEP026 } = require('./lib/warnings')
 const { buildRouting, validateBodyLimitOption, buildRouterOptions } = require('./lib/route')
 const build404 = require('./lib/four-oh-four')
 const getSecuredInitialConfig = require('./lib/initial-config-validation.js')
@@ -76,7 +77,9 @@ const {
   FST_ERR_ERROR_HANDLER_NOT_FN,
   FST_ERR_ERROR_HANDLER_ALREADY_SET,
   FST_ERR_ROUTE_METHOD_INVALID,
-  FST_ERR_ROUTE_METHOD_ALREADY_SUPPORTED
+  FST_ERR_ROUTE_METHOD_ALREADY_SUPPORTED,
+  FST_ERR_SERIALIZER_COMPILER_REMOVED,
+  FST_ERR_BUILD_VALIDATOR_RENAMED
 } = errorCodes
 
 const { buildErrorHandler } = require('./lib/error-handler.js')
@@ -331,13 +334,21 @@ function fastify (serverOptions) {
       configurable: true,
       get () { return this[kRoutePrefix] }
     },
-    validatorCompiler: {
+    inputValidatorCompiler: {
       configurable: true,
       get () { return this[kSchemaController].getValidatorCompiler() }
     },
+    outputValidatorCompiler: {
+      configurable: true,
+      get () { return this[kSchemaController].getOutputValidatorCompiler() }
+    },
     serializerCompiler: {
       configurable: true,
-      get () { return this[kSchemaController].getSerializerCompiler() }
+      get () {
+        // The serializer compiler is gone with `fast-json-stringify`: the
+        // accessor must not expose a compiler that does not exist.
+        throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('serializerCompiler')
+      }
     },
     childLoggerFactory: {
       configurable: true,
@@ -604,7 +615,7 @@ function fastify (serverOptions) {
       throw new errorCodes.FST_ERR_HOOK_INVALID_HANDLER(name, fn)
     }
 
-    if (name === 'onSend' || name === 'preSerialization' || name === 'onError' || name === 'preParsing') {
+    if (name === 'onSend' || name === 'preSerialization' || name === 'onError' || name === 'preParsing' || name === 'preResponseValidation') {
       if (fn.constructor.name === 'AsyncFunction' && fn.length === 4) {
         throw new errorCodes.FST_ERR_HOOK_INVALID_ASYNC_HANDLER()
       }
@@ -771,9 +782,9 @@ function fastify (serverOptions) {
   }
 
   function setSerializerCompiler (serializerCompiler) {
-    throwIfAlreadyStarted('Cannot call "setSerializerCompiler"!')
-    this[kSchemaController].setSerializerCompiler(serializerCompiler)
-    return this
+    // The serializer compiler is gone with `fast-json-stringify`: the method
+    // fails explicitly, it is never a silent no-op.
+    throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('fastify.setSerializerCompiler()')
   }
 
   function setSchemaController (schemaControllerOpts) {
@@ -905,11 +916,31 @@ function processOptions (options, defaultRoute, onBadUrl, onMaxParamLength) {
     throw new FST_ERR_SCHEMA_CONTROLLER_BUCKET_OPT_NOT_FN(typeof options.schemaController.bucket)
   }
 
+  if (options.compilersFactory && options.compilersFactory.buildSerializer) {
+    // The serializer factory is gone with `fast-json-stringify`: its use is a
+    // hard error, never a silent fallback.
+    throw new FST_ERR_SERIALIZER_COMPILER_REMOVED('compilersFactory.buildSerializer')
+  }
+
+  if (options.compilersFactory && options.compilersFactory.buildValidator) {
+    // The key of the input factory has been renamed in Fastify v6: the old
+    // key is a hard error, never a silent fallback.
+    throw new FST_ERR_BUILD_VALIDATOR_RENAMED()
+  }
+
   validateBodyLimitOption(options.bodyLimit)
 
   const requestIdHeader = typeof options.requestIdHeader === 'string' && options.requestIdHeader.length !== 0 ? options.requestIdHeader.toLowerCase() : (options.requestIdHeader === true && 'request-id')
   const genReqId = reqIdGenFactory(requestIdHeader, options.genReqId)
   options.bodyLimit = options.bodyLimit || defaultInitOptions.bodyLimit
+
+  // The top-level `ajv` option is deprecated in Fastify v6: it still works,
+  // but it emits the deprecation warning once per server and it will be
+  // removed in a future release. The replacement is the
+  // `schemaController.inputValidatorOptions` option.
+  // The option is *used* when the user provided it: an own property whose
+  // value is not `undefined`.
+  const usesDeprecatedAjvOption = Object.hasOwn(options, 'ajv') && options.ajv !== undefined
 
   const ajvOptions = Object.assign({
     customOptions: {},
@@ -921,6 +952,12 @@ function processOptions (options, defaultRoute, onBadUrl, onMaxParamLength) {
   }
   if (!ajvOptions.plugins || !Array.isArray(ajvOptions.plugins)) {
     throw new FST_ERR_AJV_CUSTOM_OPTIONS_OPT_NOT_ARR(typeof ajvOptions.plugins)
+  }
+
+  if (usesDeprecatedAjvOption) {
+    // The warning is emitted once, here: `processOptions` runs once per
+    // `Fastify()` call, never per route and never per request.
+    FSTDEP026()
   }
 
   const { logger, hasLogger } = createLogger(options)

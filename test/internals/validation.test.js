@@ -77,22 +77,26 @@ test('validate passes null for an undefined request part and preserves other val
 })
 
 test('Symbols', t => {
-  t.plan(5)
-  t.assert.strictEqual(typeof symbols.responseSchema, 'symbol')
+  t.plan(6)
   t.assert.strictEqual(typeof symbols.bodySchema, 'symbol')
   t.assert.strictEqual(typeof symbols.querystringSchema, 'symbol')
   t.assert.strictEqual(typeof symbols.paramsSchema, 'symbol')
   t.assert.strictEqual(typeof symbols.headersSchema, 'symbol')
+  t.assert.strictEqual(typeof symbols.outputValidatorSchema, 'symbol')
+  // The `responseSchema` symbol is gone with `fast-json-stringify`: the
+  // response schemas are compiled by the output pool, not by a serializer.
+  t.assert.strictEqual(symbols.responseSchema, undefined)
 })
 
 ;['compileSchemasForValidation',
-  'compileSchemasForSerialization'].forEach(func => {
+  'compileSchemasForResponseValidation'].forEach(func => {
   test(`${func} schema - missing schema`, t => {
-    t.plan(2)
+    t.plan(3)
     const context = {}
     validation[func](context)
     t.assert.strictEqual(typeof context[symbols.bodySchema], 'undefined')
     t.assert.strictEqual(typeof context[symbols.responseSchema], 'undefined')
+    t.assert.strictEqual(typeof context[symbols.outputValidatorSchema], 'undefined')
   })
 
   test(`${func} schema - missing output schema`, t => {
@@ -103,9 +107,10 @@ test('Symbols', t => {
   })
 })
 
-test('build schema - output schema', t => {
-  t.plan(2)
-  const opts = {
+test('build schema - output validator schema', t => {
+  t.plan(5)
+  const calls = []
+  const context = {
     schema: {
       response: {
         '2xx': {
@@ -121,11 +126,89 @@ test('build schema - output schema', t => {
           }
         }
       }
+    },
+    config: { method: 'GET', url: '/' }
+  }
+  validation.compileSchemasForResponseValidation(context, (options) => {
+    calls.push(options)
+    return ajv.compile(options.schema)
+  })
+  t.assert.strictEqual(calls.length, 2)
+  t.assert.strictEqual(calls[0].method, 'GET')
+  t.assert.strictEqual(calls[0].url, '/')
+  // The integer like key is enumerated before the string one, so the `201`
+  // entry is compiled first.
+  t.assert.strictEqual(calls[0].httpStatus, '201')
+  t.assert.strictEqual(calls[1].httpStatus, '2xx')
+})
+
+test('build schema - output validator schema without a route config', t => {
+  t.plan(2)
+  const calls = []
+  const context = {
+    schema: {
+      response: {
+        200: { type: 'object' }
+      }
     }
   }
-  validation.compileSchemasForSerialization(opts, ({ schema, method, url, httpPart }) => ajv.compile(schema))
-  t.assert.strictEqual(typeof opts[symbols.responseSchema]['2xx'], 'function')
-  t.assert.strictEqual(typeof opts[symbols.responseSchema]['201'], 'function')
+  validation.compileSchemasForResponseValidation(context, (options) => {
+    calls.push(options)
+    return ajv.compile(options.schema)
+  })
+  t.assert.strictEqual(calls.length, 1)
+  t.assert.strictEqual(calls[0].httpStatus, '200')
+})
+
+test('build schema - output validator schema with multiple content type schemas', t => {
+  t.plan(4)
+  const calls = []
+  const context = {
+    schema: {
+      response: {
+        200: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  hello: { type: 'string' }
+                }
+              }
+            },
+            'text/plain': {
+              schema: { type: 'string' }
+            }
+          }
+        }
+      }
+    },
+    config: { method: 'GET', url: '/' }
+  }
+  validation.compileSchemasForResponseValidation(context, (options) => {
+    calls.push(options)
+    return ajv.compile(options.schema)
+  })
+  t.assert.strictEqual(calls.length, 2)
+  t.assert.strictEqual(calls[0].contentType, 'application/json')
+  t.assert.strictEqual(calls[1].contentType, 'text/plain')
+  t.assert.strictEqual(typeof context[symbols.outputValidatorSchema]['200']['application/json'], 'function')
+})
+
+test('build schema - output validator schema with an invalid status code', t => {
+  t.plan(1)
+  const context = {
+    schema: {
+      response: {
+        700: { type: 'object' }
+      }
+    },
+    config: { method: 'GET', url: '/' }
+  }
+  t.assert.throws(
+    () => validation.compileSchemasForResponseValidation(context, () => () => true),
+    { code: 'FST_ERR_SCH_RESPONSE_SCHEMA_NOT_NESTED_2XX' }
+  )
 })
 
 test('build schema - body schema', t => {

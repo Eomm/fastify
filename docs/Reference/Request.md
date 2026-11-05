@@ -63,7 +63,7 @@ Request is a core Fastify object containing the following fields:
 - `signal` - An `AbortSignal` that aborts on handler timeout or client
   disconnect.
 - `routeOptions` - The route [`option`](./Routes.md#routes-options) object.
-- `validationError` - The validation error, when `attachValidation` is set.
+- `validationError` - The validation error, when `attachRequestValidation` is set.
 - `getDecorator(name)` - Returns the value of a request decorator.
 - `setDecorator(name, value)` - Sets the value of a request decorator.
 - [.getValidationFunction(schema | httpPart)](#getvalidationfunction) -
@@ -98,7 +98,7 @@ fastify.post('/:params', options, function (request, reply) {
   console.log(request.routeOptions.bodyLimit)
   console.log(request.routeOptions.handlerTimeout)
   console.log(request.routeOptions.url)
-  console.log(request.routeOptions.attachValidation)
+  console.log(request.routeOptions.attachRequestValidation)
   console.log(request.routeOptions.logLevel)
   console.log(request.routeOptions.version)
   console.log(request.routeOptions.exposeHeadRoute)
@@ -210,8 +210,9 @@ The route [`option`](./Routes.md#routes-options) object.
 - `method` - The HTTP method for the route.
 - `url` - The path of the URL to match this route.
 - `handler` - The handler for this route.
-- `attachValidation` - Attach `validationError` to request (if there is
-  a schema defined).
+- `attachRequestValidation` - Attach `validationError` to request (if there is
+  a schema defined). The option was named `attachValidation` in v5: see the
+  [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md).
 - `logLevel` - Log level defined for this route.
 - `schema` - The JSON schemas definition for this route.
 - `version` - A semver compatible string that defines the version of the
@@ -299,14 +300,14 @@ The underlying connection of the incoming request.
 ##### .validationError
 
 The validation error of the request. It is set only when the route has the
-[`attachValidation`](./Routes.md#routes-options) option enabled and the
+[`attachRequestValidation`](./Routes.md#routes-options) option enabled and the
 validation fails; otherwise it is `undefined`. In that case, Fastify calls the
 handler instead of replying with a `400` error. See
 [Validation and Serialization](./Validation-and-Serialization.md#error-handling)
 for the properties of the error object.
 
 ```js
-fastify.post('/', { schema, attachValidation: true }, function (request, reply) {
+fastify.post('/', { schema, attachRequestValidation: true }, function (request, reply) {
   if (request.validationError) {
     // `request.validationError.validationContext` is the failed part,
     // for example `body`

@@ -79,6 +79,17 @@ server.addHook<TestPayloadType>('preSerialization', function (request, reply, pa
   expect(done).type.not.toBeCallableWith(new Error(), 'foobar')
 })
 
+server.addHook<TestPayloadType>('preResponseValidation', function (request, reply, payload, done) {
+  expect(this).type.toBe<FastifyInstance>()
+  expect(request).type.toBe<FastifyRequest>()
+  expect(reply).type.toBe<FastifyReply>()
+  expect(payload).type.toBe<TestPayloadType>()
+  expect(done(new Error())).type.toBe<void>()
+  expect(done(null, 'foobar')).type.toBe<void>()
+  expect(done()).type.toBe<void>()
+  expect(done).type.not.toBeCallableWith(new Error(), 'foobar')
+})
+
 server.addHook<TestPayloadType>('onSend', function (request, reply, payload, done) {
   expect(this).type.toBe<FastifyInstance>()
   expect(request).type.toBe<FastifyRequest>()
@@ -189,6 +200,13 @@ server.addHook<TestPayloadType>('preSerialization', async function (request, rep
   expect(request).type.toBe<FastifyRequest>()
   expect(reply).type.toBe<FastifyReply>()
   expect(payload).type.toBe<TestPayloadType>() // we expect this to be unknown when not specified like in the previous test
+})
+
+server.addHook<TestPayloadType>('preResponseValidation', async function (request, reply, payload) {
+  expect(this).type.toBe<FastifyInstance>()
+  expect(request).type.toBe<FastifyRequest>()
+  expect(reply).type.toBe<FastifyReply>()
+  expect(payload).type.toBe<TestPayloadType>()
 })
 
 server.addHook<TestPayloadType>('onSend', async function (request, reply, payload) {
@@ -574,5 +592,7 @@ server.addHook('preClose', async function (done) {})
 server.addHook('preHandler', async function (request, reply, done) {})
 // @ts-expect-error  No overload matches this call.
 server.addHook('preSerialization', async function (request, reply, payload, done) {})
+// @ts-expect-error  No overload matches this call.
+server.addHook('preResponseValidation', async function (request, reply, payload, done) {})
 // @ts-expect-error  No overload matches this call.
 server.addHook('preValidation', async function (request, reply, done) {})

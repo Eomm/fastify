@@ -5,9 +5,9 @@ const Fastify = require('..')
 const os = require('node:os')
 
 const {
-  kOptions,
   kErrorHandler,
   kChildLoggerFactory,
+  kSchemaController,
   kState
 } = require('../lib/symbols')
 
@@ -18,16 +18,18 @@ test('root fastify instance is an object', t => {
   t.assert.strictEqual(typeof Fastify(), 'object')
 })
 
-test('fastify instance should contains ajv options', t => {
+test('fastify instance should contains the input validator options', t => {
   t.plan(1)
   const fastify = Fastify({
-    ajv: {
-      customOptions: {
-        nullable: false
+    schemaController: {
+      inputValidatorOptions: {
+        customOptions: {
+          nullable: false
+        }
       }
     }
   })
-  t.assert.deepStrictEqual(fastify[kOptions].ajv, {
+  t.assert.deepStrictEqual(fastify[kSchemaController].inputValidatorOptions, {
     customOptions: {
       nullable: false
     },
@@ -35,17 +37,19 @@ test('fastify instance should contains ajv options', t => {
   })
 })
 
-test('fastify instance should contains ajv options.plugins nested arrays', t => {
+test('fastify instance should contains the input validator options.plugins nested arrays', t => {
   t.plan(1)
   const fastify = Fastify({
-    ajv: {
-      customOptions: {
-        nullable: false
-      },
-      plugins: [[]]
+    schemaController: {
+      inputValidatorOptions: {
+        customOptions: {
+          nullable: false
+        },
+        plugins: [[]]
+      }
     }
   })
-  t.assert.deepStrictEqual(fastify[kOptions].ajv, {
+  t.assert.deepStrictEqual(fastify[kSchemaController].inputValidatorOptions, {
     customOptions: {
       nullable: false
     },

@@ -31,7 +31,7 @@ describes the properties available in that options object.
   - [`exposeHeadRoutes`](#exposeheadroutes)
   - [`return503OnClosing`](#return503onclosing)
   - [`ajv`](#ajv)
-  - [`serializerOpts`](#serializeropts)
+  - [Removed in v6](#removed-in-v6)
   - [`http2SessionTimeout`](#http2sessiontimeout)
   - [`frameworkErrors`](#frameworkerrors)
   - [`clientErrorHandler`](#clienterrorhandler)
@@ -80,9 +80,8 @@ describes the properties available in that options object.
     - [setReplySerializer](#setreplyserializer)
     - [setValidatorCompiler](#setvalidatorcompiler)
     - [setSchemaErrorFormatter](#setschemaerrorformatter)
-    - [setSerializerCompiler](#setserializercompiler)
-    - [validatorCompiler](#validatorcompiler)
-    - [serializerCompiler](#serializercompiler)
+    - [inputValidatorCompiler](#inputvalidatorcompiler)
+    - [outputValidatorCompiler](#outputvalidatorcompiler)
     - [schemaErrorFormatter](#schemaerrorformatter)
     - [schemaController](#schemacontroller)
     - [setNotFoundHandler](#setnotfoundhandler)
@@ -678,6 +677,19 @@ clients do not attempt to reuse the connection.
 ### `ajv`
 <a id="factory-ajv"></a>
 
+> ⚠️ **Deprecated**: the top-level `ajv` server option is deprecated in Fastify
+> v6. It still works, but every server that uses it emits the `FSTDEP026`
+> deprecation warning (once per server) and the option will be removed in a
+> future release. Use the
+> [`schemaController.inputValidatorOptions`](#schema-controller) option
+> instead: it configures the same pool, with the same content.
+> See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
+> the details.
+>
+> The two options are never merged: when a server configures both of them,
+> `schemaController.inputValidatorOptions` wins entirely and the content of
+> the deprecated `ajv` option is discarded.
+
 Configure the Ajv v8 instance used by Fastify without providing a custom one.
 The default configuration is explained in the
 [#schema-validator](./Validation-and-Serialization.md#schema-validator) section.
@@ -702,20 +714,53 @@ const fastify = require('fastify')({
 })
 ```
 
-### `serializerOpts`
-<a id="serializer-opts"></a>
-
-Customize the options of the default
-[`fast-json-stringify`](https://github.com/fastify/fast-json-stringify#options)
-instance that serializes the response's payload:
+The same configuration, written with the option that replaces the deprecated
+one:
 
 ```js
 const fastify = require('fastify')({
-  serializerOpts: {
-    rounding: 'ceil'
+  schemaController: {
+    inputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all' // Refer to [ajv options](https://ajv.js.org/options.html#removeadditional)
+      },
+      plugins: [
+        require('ajv-merge-patch'),
+        [require('ajv-keywords'), 'instanceof']
+        // Usage: [plugin, pluginOptions] - Plugin with options
+        // Usage: plugin - Plugin without options
+      ],
+      onCreate: (ajv) => {
+        // Modify the ajv instance as you need.
+        ajv.addFormat('myFormat', (data) => typeof data === 'string')
+      }
+    }
   }
 })
 ```
+
+### Removed in v6
+<a id="serializer-opts"></a>
+
+The `serializerOpts` server option has been removed: `Fastify({ serializerOpts })`
+throws the `FST_ERR_SERIALIZER_OPTS_REMOVED` error. The response payload is
+serialized with the native `JSON.stringify()`.
+
+The `fastify.setSerializerCompiler()` method and the `fastify.serializerCompiler`
+property are gone as well: they throw the `FST_ERR_SERIALIZER_COMPILER_REMOVED`
+error. The `compilersFactory.buildSerializer` key of the `schemaController`
+option is rejected too. The response schema still validates and shapes the
+payload, but it does not compile a serializer any more.
+
+The instance level accessors of the compilers have been renamed as well: the
+input side is read through `fastify.inputValidatorCompiler` and the response
+side through `fastify.outputValidatorCompiler`. The old
+`fastify.validatorCompiler` property does not exist any more, and the old
+`fastify.serializerCompiler` property keeps throwing the
+`FST_ERR_SERIALIZER_COMPILER_REMOVED` error.
+
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
+the details.
 
 ### `http2SessionTimeout`
 <a id="http2-session-timeout"></a>
@@ -1757,32 +1802,42 @@ Set the schema validator compiler for all routes. See
 Set the schema error formatter for all routes. See
 [#error-handling](./Validation-and-Serialization.md#schemaerrorformatter).
 
-#### setSerializerCompiler
-<a id="set-serializer-resolver"></a>
+#### inputValidatorCompiler
+<a id="input-validator-compiler"></a>
 
-Set the schema serializer compiler for all routes. See
-[#schema-serializer](./Validation-and-Serialization.md#schema-serializer).
+This property can be used to get the input schema validator compiler. It reads
+the input Ajv pool of the [`schemaController`](#schema-controller). Until the
+input pool is built, it answers `undefined`: the pool is built when a route
+declares a request side schema (`body`, `headers`, `querystring` or `params`).
+Once it is built, it is a function with the signature
+`function ({ schema, method, url, httpPart })` that returns the input `schema`
+compiled to a function for validating data. The input `schema` can access all
+the shared schemas added with [`.addSchema`](#add-schema) function.
 
 > ℹ️ Note:
-> [`setReplySerializer`](#set-reply-serializer) has priority if set!
+> This property was named `validatorCompiler` in Fastify v5. The old name has
+> been renamed in Fastify v6 and it does not exist any more.
+> See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
+> the details.
 
-#### validatorCompiler
-<a id="validator-compiler"></a>
+#### outputValidatorCompiler
+<a id="output-validator-compiler"></a>
 
-This property can be used to get the schema validator. If not set, it will be
-`null` until the server starts, then it will be a function with the signature
-`function ({ schema, method, url, httpPart })` that returns the input `schema`
-compiled to a function for validating data. The input `schema` can access all
-the shared schemas added with [`.addSchema`](#add-schema) function.
+This property can be used to get the output schema validator compiler. It reads
+the output Ajv pool of the [`schemaController`](#schema-controller). Until the
+output pool is built, it answers `undefined`: the pool is built when a route
+declares a response schema. Once it is built, it is a function with the
+signature `function ({ schema, method, url, httpPart, httpStatus, contentType })`
+that returns the response `schema` compiled to a function that validates and
+shapes the response payload.
 
-#### serializerCompiler
-<a id="serializer-compiler"></a>
-
-This property can be used to get the schema serializer. If not set, it will be
-`null` until the server starts, then it will be a function with the signature
-`function ({ schema, method, url, httpPart })` that returns the input `schema`
-compiled to a function for validating data. The input `schema` can access all
-the shared schemas added with [`.addSchema`](#add-schema) function.
+> ℹ️ Note:
+> The response side of Fastify v5 was serialized by the serializer compiler,
+> read through the `fastify.serializerCompiler` property. That compiler does
+> not exist any more in Fastify v6: the old property keeps throwing the
+> `FST_ERR_SERIALIZER_COMPILER_REMOVED` error.
+> See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
+> the details.
 
 #### schemaErrorFormatter
 <a id="schema-error-formatter"></a>
@@ -1797,6 +1852,8 @@ the `validationCompiler` fails to validate the schema. See
 This property can be used to fully manage:
 - `bucket`: where the schemas of your application will be stored
 - `compilersFactory`: what module must compile the JSON schemas
+- `inputValidatorOptions`: the options of the pool that validates the request
+- `outputValidatorOptions`: the options of the pool that validates the response
 
 It can be useful when your schemas are stored in another data structure that is
 unknown to Fastify.
@@ -1809,6 +1866,45 @@ documentation](https://github.com/fastify/ajv-compiler#usage).
 ```js
 const fastify = Fastify({
   schemaController: {
+    /**
+     * The options of the pool that validates the request. They are the
+     * options of the pool builder: they replace the deprecated top-level
+     * `ajv` server option.
+     */
+    inputValidatorOptions: {
+      customOptions: {
+        removeAdditional: 'all'
+      },
+      plugins: [
+        require('ajv-merge-patch')
+      ],
+      onCreate: (ajv) => {
+        ajv.addFormat('myFormat', (data) => typeof data === 'string')
+      }
+    },
+
+    /**
+     * The options of the pool that validates the response. They are the
+     * options of the pool builder too.
+     */
+    outputValidatorOptions: {
+      customOptions: {
+        // The output pool is strict by default: `removeAdditional: true`
+        // strips the properties that the schema does not declare (the parity
+        // layer declares `additionalProperties: false` exactly where the v5
+        // serializer dropped the extra properties). The value `'all'` must
+        // not be used on the output side: it removes every additional
+        // property, even the ones that an `additionalProperties: <schema>`
+        // allows.
+        removeAdditional: true,
+        // The output pool never lints the response schemas: an unknown or an
+        // annotation keyword (`example`, `discriminator`, ...) and a schema
+        // with no `type` are tolerated. `fast-json-stringify` never linted
+        // them either. The lint can be turned back on with `strict: true`.
+        strict: false
+      }
+    },
+
     /**
      * This factory is called whenever `fastify.register()` is called.
      * It may receive as input the schemas of the parent context if some schemas have been added.
@@ -1839,8 +1935,8 @@ const fastify = Fastify({
     },
 
     /**
-     * The compilers factory lets you fully control the validator and serializer
-     * in the Fastify's lifecycle, providing the encapsulation to your compilers.
+     * The compilers factory lets you fully control the validator in the
+     * Fastify's lifecycle, providing the encapsulation to your compilers.
      */
     compilersFactory: {
       /**
@@ -1850,38 +1946,65 @@ const fastify = Fastify({
        * It may receive as input the schemas of the parent context if some schemas have been added.
        * @param {object} externalSchemas these schemas will be returned by the
        * `bucket.getSchemas()`. Needed to resolve the external references $ref.
-       * @param {object} ajvServerOption the server `ajv` options to build your compilers accordingly
+       * @param {object} inputValidatorOptions the options of the input validator
+       * (the `schemaController.inputValidatorOptions` options) to build your
+       * compilers accordingly
        */
-      buildValidator: function factory (externalSchemas, ajvServerOption) {
+      buildInputValidator: function factory (externalSchemas, inputValidatorOptions) {
         // This factory function must return a schema validator compiler.
         // See [#schema-validator](./Validation-and-Serialization.md#schema-validator) for details.
-        const yourAjvInstance = new Ajv(ajvServerOption.customOptions)
+        const yourAjvInstance = new Ajv(inputValidatorOptions.customOptions)
         return function validatorCompiler ({ schema, method, url, httpPart }) {
           return yourAjvInstance.compile(schema)
         }
       },
 
       /**
-       * This factory is called whenever a new serializer instance is needed.
+       * This factory is called whenever a new output validator instance is needed.
        * It may be called whenever `fastify.register()` is called only if new schemas have been added to the
        * encapsulation context.
        * It may receive as input the schemas of the parent context if some schemas have been added.
        * @param {object} externalSchemas these schemas will be returned by the
        * `bucket.getSchemas()`. Needed to resolve the external references $ref.
-       * @param {object} serializerOptsServerOption the server `serializerOpts`
-       * options to build your compilers accordingly
+       * @param {object|undefined} outputValidatorOptions the
+       * `schemaController.outputValidatorOptions` options. They are `undefined`
+       * when the server does not configure them.
        */
-      buildSerializer: function factory (externalSchemas, serializerOptsServerOption) {
-        // This factory function must return a schema serializer compiler.
-        // See [#schema-serializer](./Validation-and-Serialization.md#schema-serializer) for details.
-        return function serializerCompiler ({ schema, method, url, httpStatus, contentType }) {
-          return data => JSON.stringify(data)
+      buildOutputValidator: function factory (externalSchemas, outputValidatorOptions) {
+        // This factory function must return a schema validator compiler.
+        // The options are `undefined` when the server does not configure the
+        // `schemaController.outputValidatorOptions` option.
+        const options = outputValidatorOptions || {}
+        const yourAjvInstance = new Ajv(options.customOptions)
+        return function validatorCompiler ({ schema, method, url, httpStatus, contentType }) {
+          return yourAjvInstance.compile(schema)
         }
       }
     }
   }
 });
 ```
+
+> ℹ️ Note:
+> The output side validates *and* shapes the payload with the JSON Schema
+> semantics: the `mode: 'JTD'` of the
+> [`@fastify/ajv-compiler`](https://github.com/fastify/ajv-compiler) package is
+> not supported by `schemaController.outputValidatorOptions`, and the type does
+> not advertise it.
+
+> ℹ️ Note:
+> `schemaController.inputValidatorOptions` and the deprecated top-level `ajv`
+> server option are never merged: when a server configures both of them, the
+> option of the schema controller wins entirely and the content of the
+> deprecated option is discarded.
+
+> ℹ️ Note:
+> The `compilersFactory.buildValidator` key has been renamed to
+> `compilersFactory.buildInputValidator` in Fastify v6. The old key is a hard
+> error: a server that configures it throws the
+> `FST_ERR_BUILD_VALIDATOR_RENAMED` error at startup, it is never a silent
+> fallback. See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md)
+> for the details.
 
 #### setNotFoundHandler
 <a id="set-not-found-handler"></a>

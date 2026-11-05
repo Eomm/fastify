@@ -18,7 +18,7 @@ import { FastifyInstance } from '../../types/instance.js'
 import { FastifyBaseLogger } from '../../types/logger.js'
 import { FastifyReply } from '../../types/reply.js'
 import { FastifyRequest, RequestRouteOptions, ValidationFunction } from '../../types/request.js'
-import { FastifyRouteConfig, RouteGenericInterface } from '../../types/route.js'
+import { FastifyRouteConfig, RouteGenericInterface, RouteShorthandOptions } from '../../types/route.js'
 import { RequestHeadersDefault, RequestParamsDefault, RequestQuerystringDefault } from '../../types/utils.js'
 
 interface RequestBody {
@@ -159,6 +159,22 @@ const server = fastify()
 server.get('/get', getHandler)
 server.post('/post', postHandler)
 server.put('/put', putHandler)
+
+// The renamed route option: `attachRequestValidation` attaches the request
+// validation errors to the request, and the attached error carries the Ajv
+// `validation` array and the `validationContext` property.
+const serverWithAttachedValidation = fastify()
+serverWithAttachedValidation.get('/attached-validation', {
+  attachRequestValidation: true
+}, (request) => {
+  expect(request.validationError).type.toBe<Error & { validation: any; validationContext: string } | undefined>()
+  expect(request.validationError?.validation).type.toBe<any>()
+  expect(request.validationError?.validationContext).type.toBe<string | undefined>()
+})
+
+// The old name of the option is not a part of the route options any more.
+expect<{ attachValidation?: boolean }>().type.not.toBeAssignableTo<RouteShorthandOptions>()
+expect<{ attachRequestValidation?: boolean }>().type.toBeAssignableTo<RouteShorthandOptions>()
 
 const customLogger: CustomLoggerInterface = {
   level: 'info',

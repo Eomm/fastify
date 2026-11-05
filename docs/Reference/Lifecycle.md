@@ -32,6 +32,10 @@ Incoming Request
                                                     │
                                                     └─▶ Reply
                                                           │
+                                                4**/5** ◀─┴─▶ preResponseValidation Hook
+                                                                │
+                                                4**/5** ◀─┴─▶ Validation
+                                                                │
                                                 4**/5** ◀─┴─▶ preSerialization Hook
                                                                 │
                                                                 └─▶ onSend Hook
@@ -40,6 +44,15 @@ Incoming Request
                                                                             │
                                                                             └─▶ onResponse Hook
 ```
+
+The response payload is validated against the route's `schema.response` between
+the `preResponseValidation` hook and the `preSerialization` hook. A reply that
+is handled by a custom reply serializer skips that validation step: the custom
+serializer owns the wire format.
+
+A `string` payload is validated too, but it is neither shaped nor serialized:
+it reaches the wire as the handler produced it, and a string that violates the
+response schema answers HTTP 500 with the `FST_ERR_OUTPUT_VALIDATION` error.
 
 When [`handlerTimeout`](./Server.md#factory-handler-timeout) is configured, a
 timer starts after routing. If the response is not sent within the allowed time,
@@ -85,9 +98,14 @@ Otherwise, the data flows as follows:
 
 `reply sent` means the JSON payload will be serialized by one of the following:
 - The [reply serializer](./Server.md#setreplyserializer) if set
-- The [serializer compiler](./Server.md#setserializercompiler) if a JSON schema
-  is set for the HTTP status code
 - The default `JSON.stringify` function
+
+When a JSON schema is set for the HTTP status code, the payload is validated
+and shaped by the
+[output validator compiler](./Server.md#output-validator-compiler) before it
+is serialized. The serializer compiler of Fastify v5 does not exist any more:
+see the [Removed in v6](./Server.md#removed-in-v6) section of the server
+reference.
 
 ## Shutdown Lifecycle
 <a id="shutdown-lifecycle"></a>

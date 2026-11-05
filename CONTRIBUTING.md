@@ -60,6 +60,11 @@ the organization's efforts for each Fastify's version.
 Declaring formal releases remains the prerogative of the lead maintainers. Do
 not bump version numbers in pull requests.
 
+The steps of a release are listed in the
+[release checklist](RELEASE_CHECKLIST.md): the generated files
+(`lib/error-serializer.js` and `lib/config-validator.js`) must be
+regenerated and committed before the release.
+
 ## Plugins
 
 Contributors to Fastify plugins must follow the same rules as the main Fastify repository,

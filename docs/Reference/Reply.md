@@ -1,43 +1,50 @@
 <h1 align="center">Fastify</h1>
 
 ## Reply
-- [Reply](#reply)
-  - [Introduction](#introduction)
-  - [.code(statusCode)](#codestatuscode)
-  - [.elapsedTime](#elapsedtime)
-  - [.statusCode](#statuscode)
-  - [.mediaType](#mediatype)
-  - [.server](#server)
-  - [.header(key, value)](#headerkey-value)
-  - [.headers(object)](#headersobject)
-  - [.getHeader(key)](#getheaderkey)
-  - [.getHeaders()](#getheaders)
-  - [.removeHeader(key)](#removeheaderkey)
-  - [.hasHeader(key)](#hasheaderkey)
-  - [.writeEarlyHints(hints, callback)](#writeearlyhintshints-callback)
-  - [.trailer(key, function)](#trailerkey-function)
-  - [.hasTrailer(key)](#hastrailerkey)
-  - [.removeTrailer(key)](#removetrailerkey)
-  - [.redirect(dest, [code ,])](#redirectdest--code)
-  - [.callNotFound()](#callnotfound)
-  - [.type(contentType)](#typecontenttype)
-  - [Removed in v6](#removed-in-v6)
-  - [.serializer(func)](#serializerfunc)
-  - [.raw](#raw)
-  - [.sent](#sent)
-  - [.hijack()](#hijack)
-  - [.send(data)](#senddata)
-    - [Objects](#objects)
-    - [Strings](#strings)
-    - [Streams](#streams)
-    - [Buffers](#buffers)
-    - [TypedArrays](#typedarrays)
-    - [ReadableStream](#readablestream)
-    - [Response](#response)
-    - [Errors](#errors)
-    - [Type of the final payload](#type-of-the-final-payload)
-    - [Async-Await and Promises](#async-await-and-promises)
-  - [.then(fulfilled, rejected)](#thenfulfilled-rejected)
+- [Introduction](#introduction)
+- [Reply](#reply-object)
+  - [Properties](#properties)
+    - [.statusCode](#statuscode)
+    - [.sent](#sent)
+    - [.request](#request)
+    - [.log](#log)
+    - [.raw](#raw)
+    - [.server](#server)
+    - [.routeOptions](#routeoptions)
+    - [.mediaType](#mediatype)
+    - [.elapsedTime](#elapsedtime)
+  - [Methods](#methods)
+    - [.send(data)](#senddata)
+      - [Objects](#objects)
+      - [Strings](#strings)
+      - [Buffers](#buffers)
+      - [TypedArrays](#typedarrays)
+      - [Streams](#streams)
+      - [ReadableStream](#readablestream)
+      - [Response](#response)
+      - [Errors](#errors)
+      - [Async-Await and Promises](#async-await-and-promises)
+      - [Type of the final payload](#type-of-the-final-payload)
+    - [.code(statusCode)](#codestatuscode)
+    - [.header(key, value)](#headerkey-value)
+    - [.headers(object)](#headersobject)
+    - [.type(contentType)](#typecontenttype)
+    - [.redirect(dest, [code])](#redirectdest-code)
+    - [.getHeader(key)](#getheaderkey)
+    - [.getHeaders()](#getheaders)
+    - [.hasHeader(key)](#hasheaderkey)
+    - [.removeHeader(key)](#removeheaderkey)
+    - [.callNotFound()](#callnotfound)
+    - [.hijack()](#hijack)
+    - [.serializer(func)](#serializerfunc)
+    - [.serialize(payload)](#serializepayload)
+    - [.trailer(key, function)](#trailerkey-function)
+    - [.hasTrailer(key)](#hastrailerkey)
+    - [.removeTrailer(key)](#removetrailerkey)
+    - [.writeEarlyHints(hints, callback)](#writeearlyhintshints-callback)
+    - [.then(fulfilled, rejected)](#thenfulfilled-rejected)
+    - [.getDecorator(name)](#getdecoratorname)
+    - [Removed in v6](#removed-in-v6)
 
 ### Introduction
 <a id="introduction"></a>
@@ -64,7 +71,7 @@ since the request was received by Fastify.
 - `.hasTrailer(key)` - Determine if a trailer has been set.
 - `.removeTrailer(key)` - Remove the value of a previously set trailer.
 - `.type(value)` - Sets the header `Content-Type`.
-- `.redirect(dest, [code,])` - Redirect to the specified URL, the status code is
+- `.redirect(dest, [code])` - Redirect to the specified URL, the status code is
   optional (defaults to `302`).
 - `.callNotFound()` - Invokes the custom not found handler.
 - `.serialize(payload)` - Serializes the specified payload with the native
@@ -82,6 +89,7 @@ since the request was received by Fastify.
   from Node core.
 - `.log` - The logger instance of the incoming request.
 - `.request` - The incoming request.
+- `.getDecorator(name)` - Returns the value of a reply decorator.
 
 ```js
 fastify.get('/', options, function (request, reply) {
@@ -93,22 +101,13 @@ fastify.get('/', options, function (request, reply) {
 })
 ```
 
-### .code(statusCode)
-<a id="code"></a>
+### Reply
+<a id="reply-object"></a>
 
-If not set via `reply.code`, the resulting `statusCode` will be `200`.
+#### Properties
+<a id="properties"></a>
 
-### .elapsedTime
-<a id="elapsedTime"></a>
-
-Invokes the custom response time getter to calculate the amount of time passed
-since the request was received by Fastify.
-
-```js
-const milliseconds = reply.elapsedTime
-```
-
-### .statusCode
+##### .statusCode
 <a id="statusCode"></a>
 
 This property reads and sets the HTTP status code. It is an alias for
@@ -118,331 +117,47 @@ if (reply.statusCode >= 299) {
   reply.statusCode = 500
 }
 ```
-### .mediaType
-<a id="mediatype"></a>
 
-Returns the media type extracted from `Content-Type` header. When `Content-Type`
-header is missing, it will return `undefined`.
+##### .sent
+<a id="sent"></a>
+
+As the name suggests, `.sent` is a property to indicate if a response has been
+sent via `reply.send()`. It will also be `true` in case `reply.hijack()` was
+used.
+
+In case a route handler is defined as an async function or it returns a promise,
+it is possible to call `reply.hijack()` to indicate that the automatic
+invocation of `reply.send()` once the handler promise resolve should be skipped.
+By calling `reply.hijack()`, an application claims full responsibility for the
+low-level request and response. Moreover, hooks will not be invoked.
+
+##### .request
+<a id="request"></a>
+
+The [`Request`](./Request.md) object of the incoming request this reply belongs
+to.
 
 ```js
-if (reply.mediaType === 'image/gif') {
-  const versionBuffer = new Uint8Array(reply.payload, 3, 3)
-  reply.header('x-gif-version', new TextDecoder().decode(versionBuffer))
-}
-```
-
-### .server
-<a id="server"></a>
-
-The Fastify server instance, scoped to the current [encapsulation
-context](./Encapsulation.md).
-
-```js
-fastify.decorate('util', function util () {
-  return 'foo'
-})
-
-fastify.get('/', async function (req, rep) {
-  return rep.server.util() // foo
+fastify.addHook('onSend', async function (request, reply, payload) {
+  reply.header('x-request-url', reply.request.url)
 })
 ```
 
-### .header(key, value)
-<a id="header"></a>
+##### .log
+<a id="log"></a>
 
-Sets a response header. If the value is omitted or undefined, it is coerced to
-`''`.
+The logger instance of the incoming request. It is the same instance as
+`request.log`, so every log line includes the request id. See
+[Logging](./Logging.md) for more information.
 
-> ℹ️ Note:
-> The header's value must be properly encoded using
-> [`encodeURI`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI)
-> or similar modules such as
-> [`encodeurl`](https://www.npmjs.com/package/encodeurl). Invalid characters
-> will result in a 500 `TypeError` response.
-
-For more information, see
-[`http.ServerResponse#setHeader`](https://nodejs.org/dist/latest-v20.x/docs/api/http.html#http_response_setheader_name_value).
-
-- ### set-cookie
-  <a id="set-cookie"></a>
-
-    - When sending different values as a cookie with `set-cookie` as the key,
-      every value will be sent as a cookie instead of replacing the previous
-      value.
-
-    ```js
-    reply.header('set-cookie', 'foo');
-    reply.header('set-cookie', 'bar');
-    ```
-  - The browser will only consider the latest reference of a key for the
-    `set-cookie` header. This is done to avoid parsing the `set-cookie` header
-    when added to a reply and speeds up the serialization of the reply.
-
-  - To reset the `set-cookie` header, you need to make an explicit call to
-    `reply.removeHeader('set-cookie')`, read more about `.removeHeader(key)`
-    [here](#removeheaderkey).
-
-
-
-### .headers(object)
-<a id="headers"></a>
-
-Sets all the keys of the object as response headers.
-[`.header`](#headerkey-value) will be called under the hood.
 ```js
-reply.headers({
-  'x-foo': 'foo',
-  'x-bar': 'bar'
+fastify.get('/', function (request, reply) {
+  reply.log.info('sending the response')
+  reply.send({ hello: 'world' })
 })
 ```
 
-### .getHeader(key)
-<a id="getHeader"></a>
-
-Retrieves the value of a previously set header.
-```js
-reply.header('x-foo', 'foo') // setHeader: key, value
-reply.getHeader('x-foo') // 'foo'
-```
-
-### .getHeaders()
-<a id="getHeaders"></a>
-
-Gets a shallow copy of all current response headers, including those set via the
-raw `http.ServerResponse`. Note that headers set via Fastify take precedence
-over those set via `http.ServerResponse`.
-
-```js
-reply.header('x-foo', 'foo')
-reply.header('x-bar', 'bar')
-reply.raw.setHeader('x-foo', 'foo2')
-reply.getHeaders() // { 'x-foo': 'foo', 'x-bar': 'bar' }
-```
-
-### .removeHeader(key)
-<a id="removeHeader"></a>
-
-Remove the value of a previously set header.
-```js
-reply.header('x-foo', 'foo')
-reply.removeHeader('x-foo')
-reply.getHeader('x-foo') // undefined
-```
-
-### .hasHeader(key)
-<a id="hasHeader"></a>
-
-Returns a boolean indicating if the specified header has been set.
-
-### .writeEarlyHints(hints, callback)
-<a id="writeEarlyHints"></a>
-
-Sends early hints to the client. Early hints allow the client to
-start processing resources before the final response is sent.
-This can improve performance by allowing the client to preload
-or preconnect to resources while the server is still generating the response.
-
-The hints parameter is an object containing the early hint key-value pairs.
-
-Example:
-
-```js
-reply.writeEarlyHints({
-  Link: '</styles.css>; rel=preload; as=style'
-});
-```
-
-The optional callback parameter is a function that will be called
-once the hint is sent or if an error occurs.
-
-### .trailer(key, function)
-<a id="trailer"></a>
-
-Sets a response trailer. Trailer is usually used when you need a header that
-requires heavy resources to be sent after the `data`, for example,
-`Server-Timing` and `Etag`. It can ensure the client receives the response data
-as soon as possible.
-
-> ℹ️ Note:
-> For HTTP/1 responses, the header `Transfer-Encoding: chunked` will be added
-> once you use a trailer. HTTP/2 does not use chunked transfer encoding and
-> sends trailers using its native trailing headers support.
-
-> ℹ️ Note:
-> Any error passed to `done` callback will be ignored. If you are interested
-> in the error, you can turn on `debug` level logging.
-
-```js
-reply.trailer('server-timing', async function () {
-  return 'db;dur=53, app;dur=47.2'
-})
-
-const { createHash } = require('node:crypto')
-// trailer function also receive two argument
-// @param {object} reply fastify reply
-// @param {string|Buffer|null} payload payload that already sent, note that it will be null when stream is sent
-// @param {function} done callback to set trailer value
-reply.trailer('content-md5', function(reply, payload, done) {
-  const hash = createHash('md5')
-  hash.update(payload)
-  done(null, hash.digest('hex'))
-})
-
-// when you prefer async-await
-reply.trailer('content-md5', async function(reply, payload) {
-  const hash = createHash('md5')
-  hash.update(payload)
-  return hash.digest('hex')
-})
-```
-
-### .hasTrailer(key)
-<a id="hasTrailer"></a>
-
-Returns a boolean indicating if the specified trailer has been set.
-
-### .removeTrailer(key)
-<a id="removeTrailer"></a>
-
-Remove the value of a previously set trailer.
-```js
-reply.trailer('server-timing', async function () {
-  return 'db;dur=53, app;dur=47.2'
-})
-reply.removeTrailer('server-timing')
-reply.hasTrailer('server-timing') // false
-```
-
-
-### .redirect(dest, [code ,])
-<a id="redirect"></a>
-
-Redirects a request to the specified URL, the status code is optional, default
-to `302` (if status code is not already set by calling `code`).
-
-> ℹ️ Note:
-> The input URL must be properly encoded using
-> [`encodeURI`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI)
-> or similar modules such as
-> [`encodeurl`](https://www.npmjs.com/package/encodeurl). Invalid URLs will
-> result in a 500 `TypeError` response.
-
-> ⚠️ Security:
-> Encoding alone does **not** prevent open redirects. Neither `encodeURI`
-> nor `encodeurl` escapes `/`, so a caller-supplied target such as
-> `//evil.com` or `/\evil.com` survives encoding and is resolved by the
-> browser as a new host (a protocol-relative, authority-opening
-> reference). When `dest` can be influenced by request input
-> (`req.query`, `req.body`, `req.params`, cookies, or headers), validate
-> that the resolved target is same-origin or on an explicit allowlist
-> instead of relying on encoding:
->
-> ```js
-> const target = new URL(dest, 'https://your-site.example')
-> if (target.origin !== 'https://your-site.example') {
->   return reply.code(400).send()
-> }
-> ```
-
-Example (no `reply.code()` call) sets status code to `302` and redirects to
-`/home`
-```js
-reply.redirect('/home')
-```
-
-Example (no `reply.code()` call) sets status code to `303` and redirects to
-`/home`
-```js
-reply.redirect('/home', 303)
-```
-
-Example (`reply.code()` call) sets status code to `303` and redirects to `/home`
-```js
-reply.code(303).redirect('/home')
-```
-
-Example (`reply.code()` call) sets status code to `302` and redirects to `/home`
-```js
-reply.code(303).redirect('/home', 302)
-```
-
-### .callNotFound()
-<a id="call-not-found"></a>
-
-Invokes the custom not found handler. Note that it will only call `preHandler`
-hook specified in [`setNotFoundHandler`](./Server.md#set-not-found-handler).
-
-```js
-reply.callNotFound()
-```
-
-### .type(contentType)
-<a id="type"></a>
-
-Sets the content type for the response. This is a shortcut for
-`reply.header('Content-Type', 'the/type')`.
-
-```js
-reply.type('text/html')
-```
-If the `Content-Type` has a JSON subtype, and the charset parameter is not set,
-`utf-8` will be used as the charset by default. For other content types, the
-charset must be set explicitly.
-
-### Removed in v6
-<a id="removed-in-v6"></a>
-
-The reply serialization helpers of Fastify v5 are gone with
-`fast-json-stringify`. They are not deprecated aliases: they do not exist any
-more, so calling them is a `TypeError`.
-
-- `reply.getSerializationFunction(schema | httpStatus, [contentType])` returned
-  the serialization function of a schema or of an HTTP status code.
-- `reply.compileSerializationSchema(schema, [httpStatus], [contentType])`
-  compiled a serialization schema into a serialization function.
-- `reply.serializeInput(data, [schema | httpStatus], [httpStatus],
-  [contentType])` serialized a payload against a schema or an HTTP status
-  code.
-
-`reply.serialize(payload)` survives: it is the alias of
-`JSON.stringify(payload)` and it does not consult the response schema of the
-route, the output validator, the custom `reply.serializer(fn)` nor the route
-level reply serializer. In Fastify v5 it followed those serializers, so the
-migration of a custom serializer is `reply.serialize(payload)` →
-`JSON.stringify(payload)`.
-
-See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
-the details.
-
-### .serializer(func)
-<a id="serializer"></a>
-
-By default, `.send()` will JSON-serialize any value that is not one of `Buffer`,
-`stream`, `string`, `undefined`, or `Error`. If you need to replace the default
-serializer with a custom serializer for a particular request, you can do so with
-the `.serializer()` utility. Be aware that if you are using a custom serializer,
-you must set a custom `'Content-Type'` header.
-
-```js
-reply
-  .header('Content-Type', 'application/x-protobuf')
-  .serializer(protoBuf.serialize)
-```
-
-Note that you don't need to use this utility inside a `handler` because Buffers,
-streams, and strings (unless a serializer is set) are considered to already be
-serialized.
-
-```js
-reply
-  .header('Content-Type', 'application/x-protobuf')
-  .send(protoBuf.serialize(data))
-```
-
-See [`.send()`](#send) for more information on sending different types of
-values.
-
-### .raw
+##### .raw
 <a id="raw"></a>
 
 This is the
@@ -464,49 +179,67 @@ app.get('/cookie-2', (req, reply) => {
 Another example of the misuse of `Reply.raw` is explained in
 [Reply](#getheaders).
 
-### .sent
-<a id="sent"></a>
+##### .server
+<a id="server"></a>
 
-As the name suggests, `.sent` is a property to indicate if a response has been
-sent via `reply.send()`. It will also be `true` in case `reply.hijack()` was
-used.
-
-In case a route handler is defined as an async function or it returns a promise,
-it is possible to call `reply.hijack()` to indicate that the automatic
-invocation of `reply.send()` once the handler promise resolve should be skipped.
-By calling `reply.hijack()`, an application claims full responsibility for the
-low-level request and response. Moreover, hooks will not be invoked.
-
-### .hijack()
-<a name="hijack"></a>
-
-Sometimes you might need to halt the execution of the normal request lifecycle
-and handle sending the response manually.
-
-To achieve this, Fastify provides the `reply.hijack()` method that can be called
-during the request lifecycle (At any point before `reply.send()` is called), and
-allows you to prevent Fastify from sending the response, and from running the
-remaining hooks (and user handler if the reply was hijacked before).
+The Fastify server instance, scoped to the current [encapsulation
+context](./Encapsulation.md).
 
 ```js
-app.get('/', (req, reply) => {
-  reply.hijack()
-  reply.raw.end('hello world')
+fastify.decorate('util', function util () {
+  return 'foo'
+})
 
-  return Promise.resolve('this will be skipped')
+fastify.get('/', async function (req, rep) {
+  return rep.server.util() // foo
 })
 ```
 
-If `reply.raw` is used to send a response back to the user, the `onResponse`
-hooks will still be executed.
+##### .routeOptions
+<a id="routeoptions"></a>
 
-### .send(data)
+A read-only reference to the route options of the incoming request. It is the
+same object as [`request.routeOptions`](./Request.md).
+
+```js
+fastify.get('/', { config: { foo: 'bar' } }, function (request, reply) {
+  reply.send(reply.routeOptions.config.foo) // bar
+})
+```
+
+##### .mediaType
+<a id="mediatype"></a>
+
+Returns the media type extracted from `Content-Type` header. When `Content-Type`
+header is missing, it will return `undefined`.
+
+```js
+if (reply.mediaType === 'image/gif') {
+  const versionBuffer = new Uint8Array(reply.payload, 3, 3)
+  reply.header('x-gif-version', new TextDecoder().decode(versionBuffer))
+}
+```
+
+##### .elapsedTime
+<a id="elapsedTime"></a>
+
+Invokes the custom response time getter to calculate the amount of time passed
+since the request was received by Fastify.
+
+```js
+const milliseconds = reply.elapsedTime
+```
+
+#### Methods
+<a id="methods"></a>
+
+##### .send(data)
 <a id="send"></a>
 
 As the name suggests, `.send()` is the function that sends the payload to the
 end user.
 
-#### Objects
+###### Objects
 <a id="send-object"></a>
 
 As noted above, if you are sending JSON objects, `send` will serialize the
@@ -518,7 +251,7 @@ fastify.get('/json', options, function (request, reply) {
 })
 ```
 
-#### Strings
+###### Strings
 <a id="send-string"></a>
 
 If you pass a string to `send` without a `Content-Type`, it will be sent as
@@ -545,7 +278,56 @@ fastify.get('/json', options, function (request, reply) {
 })
 ```
 
-#### Streams
+###### Buffers
+<a id="send-buffers"></a>
+
+If you are sending a buffer and you have not set a `'Content-Type'` header,
+*send* will set it to `'application/octet-stream'`.
+
+As noted above, Buffers are considered to be pre-serialized, so they will be
+sent unmodified without response validation.
+
+```js
+const fs = require('node:fs')
+
+fastify.get('/streams', function (request, reply) {
+  fs.readFile('some-file', (err, fileBuffer) => {
+    reply.send(err || fileBuffer)
+  })
+})
+```
+
+When using async-await you will need to return or await the reply object:
+```js
+const fs = require('node:fs')
+
+fastify.get('/streams', async function (request, reply) {
+  fs.readFile('some-file', (err, fileBuffer) => {
+    reply.send(err || fileBuffer)
+  })
+  return reply
+})
+```
+
+###### TypedArrays
+<a id="send-typedarrays"></a>
+
+`send` manages TypedArray like a Buffer, and sets the `'Content-Type'`
+header to `'application/octet-stream'` if not already set.
+
+As noted above, TypedArray/Buffers are considered to be pre-serialized, so they
+will be sent unmodified without response validation.
+
+```js
+const fs = require('node:fs')
+
+fastify.get('/streams', function (request, reply) {
+  const typedArray = new Uint16Array(10)
+  reply.send(typedArray)
+})
+```
+
+###### Streams
 <a id="send-streams"></a>
 
 If you are sending a stream and you have not set a `'Content-Type'` header,
@@ -582,56 +364,7 @@ fastify.get('/streams', async function (request, reply) {
 })
 ```
 
-#### Buffers
-<a id="send-buffers"></a>
-
-If you are sending a buffer and you have not set a `'Content-Type'` header,
-*send* will set it to `'application/octet-stream'`.
-
-As noted above, Buffers are considered to be pre-serialized, so they will be
-sent unmodified without response validation.
-
-```js
-const fs = require('node:fs')
-
-fastify.get('/streams', function (request, reply) {
-  fs.readFile('some-file', (err, fileBuffer) => {
-    reply.send(err || fileBuffer)
-  })
-})
-```
-
-When using async-await you will need to return or await the reply object:
-```js
-const fs = require('node:fs')
-
-fastify.get('/streams', async function (request, reply) {
-  fs.readFile('some-file', (err, fileBuffer) => {
-    reply.send(err || fileBuffer)
-  })
-  return reply
-})
-```
-
-#### TypedArrays
-<a id="send-typedarrays"></a>
-
-`send` manages TypedArray like a Buffer, and sets the `'Content-Type'`
-header to `'application/octet-stream'` if not already set.
-
-As noted above, TypedArray/Buffers are considered to be pre-serialized, so they
-will be sent unmodified without response validation.
-
-```js
-const fs = require('node:fs')
-
-fastify.get('/streams', function (request, reply) {
-  const typedArray = new Uint16Array(10)
-  reply.send(typedArray)
-})
-```
-
-#### ReadableStream
+###### ReadableStream
 <a id="send-readablestream"></a>
 
 `ReadableStream` will be treated as a node stream mentioned above,
@@ -649,7 +382,7 @@ fastify.get('/streams', function (request, reply) {
 })
 ```
 
-#### Response
+###### Response
 <a id="send-response"></a>
 
 `Response` allows to manage the reply payload, status code and
@@ -679,7 +412,7 @@ fastify.get('/streams', function (request, reply) {
 ```
 
 
-#### Errors
+###### Errors
 <a id="errors"></a>
 
 If you pass to *send* an object that is an instance of *Error*, Fastify will
@@ -781,20 +514,7 @@ fastify.setNotFoundHandler(function (request, reply) {
 })
 ```
 
-#### Type of the final payload
-<a id="payload-type"></a>
-
-The type of the sent payload (after serialization and going through any
-[`onSend` hooks](./Hooks.md#onsend)) must be one of the following types,
-otherwise, an error will be thrown:
-
-- `string`
-- `Buffer`
-- `stream`
-- `undefined`
-- `null`
-
-#### Async-Await and Promises
+###### Async-Await and Promises
 <a id="async-await-promise"></a>
 
 Fastify natively handles promises and supports async-await.
@@ -835,7 +555,334 @@ fastify.get('/botnet', async function (request, reply) {
 If you want to know more please review
 [Routes#async-await](./Routes.md#async-await).
 
-### .then(fulfilled, rejected)
+###### Type of the final payload
+<a id="payload-type"></a>
+
+The type of the sent payload (after serialization and going through any
+[`onSend` hooks](./Hooks.md#onsend)) must be one of the following types,
+otherwise, an error will be thrown:
+
+- `string`
+- `Buffer`
+- `stream`
+- `undefined`
+- `null`
+
+##### .code(statusCode)
+<a id="code"></a>
+
+If not set via `reply.code`, the resulting `statusCode` will be `200`.
+
+`.status(statusCode)` is an alias of `.code(statusCode)`.
+
+##### .header(key, value)
+<a id="header"></a>
+
+Sets a response header. If the value is omitted or undefined, it is coerced to
+`''`.
+
+> ℹ️ Note:
+> The header's value must be properly encoded using
+> [`encodeURI`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI)
+> or similar modules such as
+> [`encodeurl`](https://www.npmjs.com/package/encodeurl). Invalid characters
+> will result in a 500 `TypeError` response.
+
+For more information, see
+[`http.ServerResponse#setHeader`](https://nodejs.org/dist/latest-v20.x/docs/api/http.html#http_response_setheader_name_value).
+
+- ###### set-cookie
+  <a id="set-cookie"></a>
+
+    - When sending different values as a cookie with `set-cookie` as the key,
+      every value will be sent as a cookie instead of replacing the previous
+      value.
+
+    ```js
+    reply.header('set-cookie', 'foo');
+    reply.header('set-cookie', 'bar');
+    ```
+  - The browser will only consider the latest reference of a key for the
+    `set-cookie` header. This is done to avoid parsing the `set-cookie` header
+    when added to a reply and speeds up the serialization of the reply.
+
+  - To reset the `set-cookie` header, you need to make an explicit call to
+    `reply.removeHeader('set-cookie')`, read more about `.removeHeader(key)`
+    [here](#removeheaderkey).
+
+##### .headers(object)
+<a id="headers"></a>
+
+Sets all the keys of the object as response headers.
+[`.header`](#headerkey-value) will be called under the hood.
+```js
+reply.headers({
+  'x-foo': 'foo',
+  'x-bar': 'bar'
+})
+```
+
+##### .type(contentType)
+<a id="type"></a>
+
+Sets the content type for the response. This is a shortcut for
+`reply.header('Content-Type', 'the/type')`.
+
+```js
+reply.type('text/html')
+```
+If the `Content-Type` has a JSON subtype, and the charset parameter is not set,
+`utf-8` will be used as the charset by default. For other content types, the
+charset must be set explicitly.
+
+##### .redirect(dest, [code])
+<a id="redirect"></a>
+
+Redirects a request to the specified URL, the status code is optional, default
+to `302` (if status code is not already set by calling `code`).
+
+> ℹ️ Note:
+> The input URL must be properly encoded using
+> [`encodeURI`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURI)
+> or similar modules such as
+> [`encodeurl`](https://www.npmjs.com/package/encodeurl). Invalid URLs will
+> result in a 500 `TypeError` response.
+
+> ⚠️ Security:
+> Encoding alone does **not** prevent open redirects. Neither `encodeURI`
+> nor `encodeurl` escapes `/`, so a caller-supplied target such as
+> `//evil.com` or `/\evil.com` survives encoding and is resolved by the
+> browser as a new host (a protocol-relative, authority-opening
+> reference). When `dest` can be influenced by request input
+> (`req.query`, `req.body`, `req.params`, cookies, or headers), validate
+> that the resolved target is same-origin or on an explicit allowlist
+> instead of relying on encoding:
+>
+> ```js
+> const target = new URL(dest, 'https://your-site.example')
+> if (target.origin !== 'https://your-site.example') {
+>   return reply.code(400).send()
+> }
+> ```
+
+Example (no `reply.code()` call) sets status code to `302` and redirects to
+`/home`
+```js
+reply.redirect('/home')
+```
+
+Example (no `reply.code()` call) sets status code to `303` and redirects to
+`/home`
+```js
+reply.redirect('/home', 303)
+```
+
+Example (`reply.code()` call) sets status code to `303` and redirects to `/home`
+```js
+reply.code(303).redirect('/home')
+```
+
+Example (`reply.code()` call) sets status code to `302` and redirects to `/home`
+```js
+reply.code(303).redirect('/home', 302)
+```
+
+##### .getHeader(key)
+<a id="getHeader"></a>
+
+Retrieves the value of a previously set header.
+```js
+reply.header('x-foo', 'foo') // setHeader: key, value
+reply.getHeader('x-foo') // 'foo'
+```
+
+##### .getHeaders()
+<a id="getHeaders"></a>
+
+Gets a shallow copy of all current response headers, including those set via the
+raw `http.ServerResponse`. Note that headers set via Fastify take precedence
+over those set via `http.ServerResponse`.
+
+```js
+reply.header('x-foo', 'foo')
+reply.header('x-bar', 'bar')
+reply.raw.setHeader('x-foo', 'foo2')
+reply.getHeaders() // { 'x-foo': 'foo', 'x-bar': 'bar' }
+```
+
+##### .hasHeader(key)
+<a id="hasHeader"></a>
+
+Returns a boolean indicating if the specified header has been set.
+
+##### .removeHeader(key)
+<a id="removeHeader"></a>
+
+Remove the value of a previously set header.
+```js
+reply.header('x-foo', 'foo')
+reply.removeHeader('x-foo')
+reply.getHeader('x-foo') // undefined
+```
+
+##### .callNotFound()
+<a id="call-not-found"></a>
+
+Invokes the custom not found handler. Note that it will only call `preHandler`
+hook specified in [`setNotFoundHandler`](./Server.md#set-not-found-handler).
+
+```js
+reply.callNotFound()
+```
+
+##### .hijack()
+<a name="hijack"></a>
+
+Sometimes you might need to halt the execution of the normal request lifecycle
+and handle sending the response manually.
+
+To achieve this, Fastify provides the `reply.hijack()` method that can be called
+during the request lifecycle (At any point before `reply.send()` is called), and
+allows you to prevent Fastify from sending the response, and from running the
+remaining hooks (and user handler if the reply was hijacked before).
+
+```js
+app.get('/', (req, reply) => {
+  reply.hijack()
+  reply.raw.end('hello world')
+
+  return Promise.resolve('this will be skipped')
+})
+```
+
+If `reply.raw` is used to send a response back to the user, the `onResponse`
+hooks will still be executed.
+
+##### .serializer(func)
+<a id="serializer"></a>
+
+By default, `.send()` will JSON-serialize any value that is not one of `Buffer`,
+`stream`, `string`, `undefined`, or `Error`. If you need to replace the default
+serializer with a custom serializer for a particular request, you can do so with
+the `.serializer()` utility. Be aware that if you are using a custom serializer,
+you must set a custom `'Content-Type'` header.
+
+```js
+reply
+  .header('Content-Type', 'application/x-protobuf')
+  .serializer(protoBuf.serialize)
+```
+
+Note that you don't need to use this utility inside a `handler` because Buffers,
+streams, and strings (unless a serializer is set) are considered to already be
+serialized.
+
+```js
+reply
+  .header('Content-Type', 'application/x-protobuf')
+  .send(protoBuf.serialize(data))
+```
+
+See [`.send()`](#send) for more information on sending different types of
+values.
+
+##### .serialize(payload)
+<a id="serialize"></a>
+
+Serializes the specified payload with the native `JSON.stringify()` and returns
+the serialized payload. It is an alias of `JSON.stringify(payload)`: it does not
+consult the response schema of the route, the output validator, the custom
+[`.serializer()`](#serializerfunc) nor the route level reply serializer. In
+Fastify v5 it followed those serializers, so the migration of a custom
+serializer is `reply.serialize(payload)` → `JSON.stringify(payload)`.
+
+```js
+fastify.get('/', function (request, reply) {
+  const payload = reply.serialize({ hello: 'world' })
+  reply.type('application/json').send(payload)
+})
+```
+
+##### .trailer(key, function)
+<a id="trailer"></a>
+
+Sets a response trailer. Trailer is usually used when you need a header that
+requires heavy resources to be sent after the `data`, for example,
+`Server-Timing` and `Etag`. It can ensure the client receives the response data
+as soon as possible.
+
+> ℹ️ Note:
+> For HTTP/1 responses, the header `Transfer-Encoding: chunked` will be added
+> once you use a trailer. HTTP/2 does not use chunked transfer encoding and
+> sends trailers using its native trailing headers support.
+
+> ℹ️ Note:
+> Any error passed to `done` callback will be ignored. If you are interested
+> in the error, you can turn on `debug` level logging.
+
+```js
+reply.trailer('server-timing', async function () {
+  return 'db;dur=53, app;dur=47.2'
+})
+
+const { createHash } = require('node:crypto')
+// trailer function also receive two argument
+// @param {object} reply fastify reply
+// @param {string|Buffer|null} payload payload that already sent, note that it will be null when stream is sent
+// @param {function} done callback to set trailer value
+reply.trailer('content-md5', function(reply, payload, done) {
+  const hash = createHash('md5')
+  hash.update(payload)
+  done(null, hash.digest('hex'))
+})
+
+// when you prefer async-await
+reply.trailer('content-md5', async function(reply, payload) {
+  const hash = createHash('md5')
+  hash.update(payload)
+  return hash.digest('hex')
+})
+```
+
+##### .hasTrailer(key)
+<a id="hasTrailer"></a>
+
+Returns a boolean indicating if the specified trailer has been set.
+
+##### .removeTrailer(key)
+<a id="removeTrailer"></a>
+
+Remove the value of a previously set trailer.
+```js
+reply.trailer('server-timing', async function () {
+  return 'db;dur=53, app;dur=47.2'
+})
+reply.removeTrailer('server-timing')
+reply.hasTrailer('server-timing') // false
+```
+
+##### .writeEarlyHints(hints, callback)
+<a id="writeEarlyHints"></a>
+
+Sends early hints to the client. Early hints allow the client to
+start processing resources before the final response is sent.
+This can improve performance by allowing the client to preload
+or preconnect to resources while the server is still generating the response.
+
+The hints parameter is an object containing the early hint key-value pairs.
+
+Example:
+
+```js
+reply.writeEarlyHints({
+  Link: '</styles.css>; rel=preload; as=style'
+});
+```
+
+The optional callback parameter is a function that will be called
+once the hint is sent or if an error occurs.
+
+##### .then(fulfilled, rejected)
 <a id="then"></a>
 
 As the name suggests, a `Reply` object can be awaited upon, i.e. `await reply`
@@ -853,3 +900,43 @@ For more details, see:
   feature
 - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/then
   for the signature
+
+##### .getDecorator(name)
+
+Returns the value of a reply decorator declared with
+[`decorateReply`](./Decorators.md#decoratereplyname-value-dependencies). If the
+decorator is a function, it is returned bound to the reply. It throws an
+`FST_ERR_DEC_UNDECLARED` error if the decorator has not been declared. See
+[`getDecorator`](./Decorators.md#getdecoratorname) for more details.
+
+```js
+fastify.decorateReply('helper', function () {
+  return this.statusCode
+})
+
+fastify.get('/', function (request, reply) {
+  const helper = reply.getDecorator('helper')
+  reply.code(201).send({ statusCode: helper() }) // { statusCode: 201 }
+})
+```
+
+##### Removed in v6
+<a id="removed-in-v6"></a>
+
+The reply serialization helpers of Fastify v5 are gone with
+`fast-json-stringify`. They are not deprecated aliases: they do not exist any
+more, so calling them is a `TypeError`.
+
+- `reply.getSerializationFunction(schema | httpStatus, [contentType])` returned
+  the serialization function of a schema or of an HTTP status code.
+- `reply.compileSerializationSchema(schema, [httpStatus], [contentType])`
+  compiled a serialization schema into a serialization function.
+- `reply.serializeInput(data, [schema | httpStatus], [httpStatus],
+  [contentType])` serialized a payload against a schema or an HTTP status
+  code.
+
+`reply.serialize(payload)` survives as an alias of `JSON.stringify(payload)`:
+see [`.serialize(payload)`](#serializepayload).
+
+See the [V5 to V6 migration guide](../Guides/Migration-Guide-V6.md) for
+the details.
